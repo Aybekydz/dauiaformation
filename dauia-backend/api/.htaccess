@@ -1,0 +1,12 @@
+RewriteEngine On
+
+# Rediriger toutes les requêtes API vers index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# Sécurité : bloquer l'accès aux fichiers sensibles
+<FilesMatch "\.(sql|md|env|json|lock)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
