@@ -49,6 +49,8 @@ function ConstellationBG({ intensity = 1 }) {
 // ICONS
 // ═══════════════════════════════════════════════════════════════
 const I = {
+  sun: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M12.95 3.05l-1.41 1.41M4.46 11.54l-1.41 1.41" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
+  moon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 8.5a5.5 5.5 0 01-6-6 5.5 5.5 0 106 6z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>,
   play: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 2.5V13.5L13 8L4 2.5Z" fill="currentColor"/></svg>,
   plus: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   trash: <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M5 3V2a1 1 0 011-1h4a1 1 0 011 1v1M2 4h12M4 4l.7 9.2a1.5 1.5 0 001.5 1.3h3.6a1.5 1.5 0 001.5-1.3L12 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
@@ -142,6 +144,15 @@ export default function DauiaApp() {
   const [sandboxCode, setSandboxCode] = useState("# dauia.com — Python AI Sandbox\n# Bibliothèques : numpy, pandas, matplotlib,\n# scikit-learn, scipy, seaborn, statsmodels\n\nimport numpy as np\nimport pandas as pd\nfrom sklearn.linear_model import LinearRegression\n\nX = np.array([[1],[2],[3],[4],[5]])\ny = np.array([2.1, 4.0, 5.8, 8.1, 9.9])\n\nmodel = LinearRegression()\nmodel.fit(X, y)\n\nprint(f\"Coefficient : {model.coef_[0]:.2f}\")\nprint(f\"Intercept   : {model.intercept_:.2f}\")\nprint(f\"R² score    : {model.score(X, y):.4f}\")\nprint(f\"Prédiction x=10 : {model.predict([[10]])[0]:.2f}\")\n");
   const [consoleOut, setConsoleOut] = useState("");
   const [isRunning, setIsRunning] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem("dauia-theme") || "dark"; } catch { return "dark"; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem("dauia-theme", theme); } catch {}
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
 
   const navigate = (p) => { setPageTransition(false); setTimeout(() => { setPage(p); setPageTransition(true); if (mainRef.current) mainRef.current.scrollTop = 0; }, 180); };
 
@@ -188,16 +199,66 @@ export default function DauiaApp() {
 
   const handleTab = (e) => { if (e.key === "Tab") { e.preventDefault(); const s = e.target.selectionStart; setSandboxCode(sandboxCode.substring(0, s) + "    " + sandboxCode.substring(e.target.selectionEnd)); setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s + 4; }, 0); } };
 
+  // Resizable panels state (percentages)
+  const [editorWidth, setEditorWidth] = useState(() => {
+    try { return parseFloat(localStorage.getItem("dauia-editor-w")) || 58; } catch { return 58; }
+  });
+  const [terminalHeight, setTerminalHeight] = useState(() => {
+    try { return parseFloat(localStorage.getItem("dauia-term-h")) || 35; } catch { return 35; }
+  });
+  const dragging = useRef(null);
+
+  useEffect(() => {
+    try { localStorage.setItem("dauia-editor-w", editorWidth); } catch {}
+  }, [editorWidth]);
+  useEffect(() => {
+    try { localStorage.setItem("dauia-term-h", terminalHeight); } catch {}
+  }, [terminalHeight]);
+
+  const startDrag = useCallback((type, e) => {
+    e.preventDefault();
+    dragging.current = type;
+    document.body.style.cursor = type === "vertical" ? "col-resize" : "row-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!dragging.current) return;
+      const sandbox = document.querySelector(".sandbox");
+      if (!sandbox) return;
+      const rect = sandbox.getBoundingClientRect();
+      if (dragging.current === "vertical") {
+        const pct = ((e.clientX - rect.left) / rect.width) * 100;
+        setEditorWidth(Math.min(Math.max(pct, 25), 80));
+      } else if (dragging.current === "horizontal") {
+        const pct = ((rect.bottom - e.clientY) / rect.height) * 100;
+        setTerminalHeight(Math.min(Math.max(pct, 15), 60));
+      }
+    };
+    const onUp = () => {
+      if (dragging.current) {
+        dragging.current = null;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, []);
+
   return (
-    <div className="root" ref={mainRef}>
+    <div className={`root ${theme}`} ref={mainRef}>
       <style>{`
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-:root{--bg:#070a14;--bg-card:#0d1120;--bg-surface:#111730;--bg-elevated:#182040;--bg-input:#0a0e1c;--border:#1a2040;--border-l:#252e55;--text:#eef0ff;--text-2:#9aa2c4;--text-m:#5a6290;--accent:#4a7cff;--accent-b:#6b9aff;--accent-g:rgba(74,124,255,.1);--accent-gs:rgba(74,124,255,.22);--success:#34d399;--error:#f87171;--warn:#fbbf24;--font:'Poppins',sans-serif;--mono:'JetBrains Mono',monospace;}
+:root{--bg:#070a14;--bg-card:#0d1120;--bg-surface:#111730;--bg-elevated:#182040;--bg-input:#0a0e1c;--border:#1a2040;--border-l:#252e55;--text:#eef0ff;--text-2:#9aa2c4;--text-m:#5a6290;--accent:#4a7cff;--accent-b:#6b9aff;--accent-g:rgba(74,124,255,.1);--accent-gs:rgba(74,124,255,.22);--success:#34d399;--error:#f87171;--warn:#fbbf24;--font:'Poppins',sans-serif;--mono:'JetBrains Mono',monospace;--code-text:#c4b5fd;--console-text:#a5b4fc;--nav-scrolled-bg:rgba(7,10,20,.88);--modal-overlay:rgba(4,6,12,.8);}
+.root.light{--bg:#f5f7fb;--bg-card:#ffffff;--bg-surface:#eef1f8;--bg-elevated:#e4e8f2;--bg-input:#f0f2f8;--border:#d8dce8;--border-l:#c4c9d9;--text:#1a1d2e;--text-2:#4a5068;--text-m:#7a8098;--accent:#3563e9;--accent-b:#2850cc;--accent-g:rgba(53,99,233,.08);--accent-gs:rgba(53,99,233,.15);--success:#16a369;--error:#dc2626;--warn:#d97706;--code-text:#5b21b6;--console-text:#4338ca;--nav-scrolled-bg:rgba(245,247,251,.92);--modal-overlay:rgba(0,0,0,.4);}
 *{box-sizing:border-box;margin:0;padding:0;}.root{height:100vh;width:100vw;overflow-x:hidden;overflow-y:auto;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased;}
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes scaleIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}@keyframes slideR{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}@keyframes glow{0%,100%{box-shadow:0 0 20px rgba(74,124,255,.08)}50%{box-shadow:0 0 40px rgba(74,124,255,.18)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .page-in{animation:fadeUp .45s cubic-bezier(.22,1,.36,1) both}.page-out{opacity:0;transform:translateY(-8px);transition:all .18s}
-.nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 36px;height:60px;transition:all .3s}.nav.scrolled{background:rgba(7,10,20,.88);backdrop-filter:blur(16px) saturate(1.3);border-bottom:1px solid var(--border)}
+.nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 36px;height:60px;transition:all .3s}.nav.scrolled{background:var(--nav-scrolled-bg);backdrop-filter:blur(16px) saturate(1.3);border-bottom:1px solid var(--border)}
 .nav-logo{display:flex;align-items:center;gap:9px;cursor:pointer}.nav-logo-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff}.nav-logo-txt{font-weight:700;font-size:17px;letter-spacing:-.3px}
 .nav-links{display:flex;gap:4px;align-items:center}.nav-l{padding:7px 13px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-2);transition:all .15s;border:none;background:none;font-family:var(--font);display:flex;align-items:center;gap:5px}.nav-l:hover{color:var(--text);background:var(--accent-g)}.nav-l.act{color:var(--accent-b);background:var(--accent-g)}
 .nav-cta{padding:7px 18px;border-radius:7px;border:none;cursor:pointer;background:var(--accent);color:#fff;font-weight:600;font-size:13px;font-family:var(--font);transition:all .2s;margin-left:6px}.nav-cta:hover{background:var(--accent-b);transform:translateY(-1px);box-shadow:0 4px 16px rgba(74,124,255,.25)}
@@ -212,7 +273,7 @@ export default function DauiaApp() {
 .btn-hs{background:transparent;color:var(--text);border:1px solid var(--border-l)}.btn-hs:hover{border-color:var(--accent);background:var(--accent-g)}
 .cw{background:var(--bg-card);border:1px solid var(--border);border-radius:13px;overflow:hidden;text-align:left;box-shadow:0 16px 50px rgba(0,0,0,.35),0 0 30px rgba(74,124,255,.04);margin-top:50px;max-width:560px;width:100%;animation:fadeUp .6s .4s both}
 .cw-bar{display:flex;align-items:center;gap:6px;padding:11px 14px;border-bottom:1px solid var(--border)}.cw-dot{width:9px;height:9px;border-radius:50%}
-.cw pre{padding:18px;font-family:var(--mono);font-size:12.5px;line-height:1.8;color:#c4b5fd;overflow-x:auto}.kw{color:#c792ea}.fn{color:#82aaff}.st{color:#a5d6a7}.cm{color:#5a6290;font-style:italic}.nb{color:#f78c6c}.op{color:#89ddff}
+.cw pre{padding:18px;font-family:var(--mono);font-size:12.5px;line-height:1.8;color:var(--code-text);overflow-x:auto}.kw{color:#c792ea}.fn{color:#82aaff}.st{color:#a5d6a7}.cm{color:#5a6290;font-style:italic}.nb{color:#f78c6c}.op{color:#89ddff}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.stat{background:var(--bg);padding:32px 18px;text-align:center}.stat-n{font-size:32px;font-weight:700;margin-bottom:4px}.stat-l{color:var(--text-m);font-size:12.5px}
 .section{padding:72px 36px;max-width:1140px;margin:0 auto}.sec-label{font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--accent);margin-bottom:10px}.sec-title{font-size:clamp(26px,3.5vw,38px);font-weight:700;line-height:1.15;letter-spacing:-.4px;margin-bottom:14px}.sec-desc{color:var(--text-2);max-width:500px;line-height:1.7;margin-bottom:40px;font-weight:400}
 .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.feat{padding:28px;border-radius:13px;background:var(--bg-card);border:1px solid var(--border);transition:all .25s}.feat:hover{border-color:var(--border-l);transform:translateY(-2px)}.feat-ic{width:40px;height:40px;border-radius:9px;background:var(--accent-g);border:1px solid rgba(74,124,255,.12);display:flex;align-items:center;justify-content:center;color:var(--accent-b);margin-bottom:15px}.feat h4{font-size:15px;font-weight:600;margin-bottom:6px}.feat p{color:var(--text-2);font-size:12.5px;line-height:1.7;font-weight:400}
@@ -222,7 +283,7 @@ export default function DauiaApp() {
 .c-meta{display:flex;gap:12px;font-size:11.5px;color:var(--text-m);align-items:center;flex-wrap:wrap}.c-meta span{display:flex;align-items:center;gap:3px}
 .tag{padding:2px 9px;border-radius:5px;font-size:10.5px;background:var(--bg-surface);color:var(--text-2);border:1px solid var(--border)}
 .empty{text-align:center;padding:60px 20px;color:var(--text-m)}.empty-icon{font-size:48px;margin-bottom:16px;opacity:.4}.empty p{margin-bottom:20px;font-size:14px}
-.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(4,6,12,.8);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:fadeIn .2s both}
+.modal-overlay{position:fixed;inset:0;z-index:200;background:var(--modal-overlay);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:fadeIn .2s both}
 .modal{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:36px;width:420px;max-width:92vw;animation:scaleIn .3s both;position:relative}
 .modal h2{font-size:22px;font-weight:700;margin-bottom:6px}.modal .sub{color:var(--text-2);font-size:13px;margin-bottom:24px;font-weight:400}
 .field{margin-bottom:16px}.field label{display:block;font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:5px}.field-input{position:relative}
@@ -243,14 +304,21 @@ export default function DauiaApp() {
 .textarea{width:100%;min-height:100px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-family:var(--font);font-size:13px;resize:vertical;outline:none;transition:border-color .2s}.textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-g)}
 .icon-picker{display:flex;gap:6px;flex-wrap:wrap}.icon-opt{width:36px;height:36px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .15s}.icon-opt:hover,.icon-opt.sel{border-color:var(--accent);background:var(--accent-g)}
 .sandbox{display:flex;height:calc(100vh - 60px);overflow:hidden}
-.sb-editor{flex:1;display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.sb-editor{display:flex;flex-direction:column;border-right:none;flex-shrink:0}
 .sb-header{height:46px;display:flex;align-items:center;padding:0 16px;gap:10px;border-bottom:1px solid var(--border);background:var(--bg-card);flex-shrink:0}
 .sb-editor-area{flex:1;display:flex;overflow:hidden;background:var(--bg-input)}
 .ln{padding:14px 0;text-align:right;user-select:none;font-family:var(--mono);font-size:12px;line-height:1.75;color:var(--text-m);min-width:36px;padding-right:10px;border-right:1px solid var(--border);opacity:.5}
-.code-ta{width:100%;height:100%;background:transparent;color:#c4b5fd;border:none;outline:none;font-family:var(--mono);font-size:13px;line-height:1.75;resize:none;padding:14px;tab-size:4;white-space:pre;overflow-wrap:normal;overflow-x:auto}.code-ta::selection{background:rgba(74,124,255,.22)}
+.code-ta{width:100%;height:100%;background:transparent;color:var(--code-text);border:none;outline:none;font-family:var(--mono);font-size:13px;line-height:1.75;resize:none;padding:14px;tab-size:4;white-space:pre;overflow-wrap:normal;overflow-x:auto}.code-ta::selection{background:rgba(74,124,255,.22)}
+.sb-right{display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.sb-right-top{display:flex;flex-direction:column;overflow:hidden}
+.sb-right-bottom{display:flex;flex-direction:column;overflow:hidden;border-top:none}
+.resize-handle-v{width:6px;cursor:col-resize;background:var(--border);position:relative;flex-shrink:0;transition:background .15s;z-index:10}.resize-handle-v:hover,.resize-handle-v:active{background:var(--accent)}
+.resize-dots-v{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;gap:3px;opacity:.5}.resize-dots-v::before,.resize-dots-v::after{content:'';width:3px;height:3px;border-radius:50%;background:var(--text-m)}.resize-handle-v:hover .resize-dots-v{opacity:1}
+.resize-handle-h{height:6px;cursor:row-resize;background:var(--border);position:relative;flex-shrink:0;transition:background .15s;z-index:10}.resize-handle-h:hover,.resize-handle-h:active{background:var(--accent)}
+.resize-dots-h{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;gap:3px;opacity:.5}.resize-dots-h::before,.resize-dots-h::after{content:'';width:3px;height:3px;border-radius:50%;background:var(--text-m)}.resize-handle-h:hover .resize-dots-h{opacity:1}
 .sb-output{width:42%;min-width:280px;display:flex;flex-direction:column;background:var(--bg-input)}
 .sb-out-head{height:46px;display:flex;align-items:center;padding:0 16px;gap:6px;border-bottom:1px solid var(--border);background:var(--bg-card);font-size:12px;font-weight:600;color:var(--text-2);flex-shrink:0}
-.sb-console{flex:1;overflow:auto;padding:16px;font-family:var(--mono);font-size:12px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:#a5b4fc}
+.sb-console{flex:1;overflow:auto;padding:16px;font-family:var(--mono);font-size:12px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--console-text)}
 .sb-status{padding:8px 14px;border-top:1px solid var(--border);font-size:10px;color:var(--text-m);display:flex;justify-content:space-between;flex-shrink:0}
 .sb-libs{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card);display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0}.sb-lib{padding:3px 9px;border-radius:5px;font-size:10px;background:var(--bg-surface);color:var(--text-2);border:1px solid var(--border);font-family:var(--mono)}
 .footer{border-top:1px solid var(--border);padding:40px 36px 28px;display:flex;justify-content:space-between;align-items:start;max-width:1140px;margin:60px auto 0;flex-wrap:wrap;gap:28px}
@@ -259,7 +327,17 @@ export default function DauiaApp() {
 .user-pill{display:flex;align-items:center;gap:7px;padding:5px 12px 5px 6px;border-radius:20px;background:var(--bg-surface);border:1px solid var(--border);cursor:pointer;font-size:12px;font-weight:500;color:var(--text-2);transition:all .15s}.user-pill:hover{border-color:var(--border-l);color:var(--text)}
 .user-av{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
 .user-menu{position:absolute;top:54px;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:180px;box-shadow:0 12px 32px rgba(0,0,0,.3);animation:scaleIn .15s both;z-index:110}.user-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:7px;border:none;background:none;color:var(--text-2);font-family:var(--font);font-size:12.5px;cursor:pointer;transition:all .12s;text-align:left}.user-menu button:hover{background:var(--bg-surface);color:var(--text)}
-@media(max-width:768px){.hero{padding:50px 18px 40px}.nav{padding:0 14px}.section{padding:44px 18px}.feat-grid,.c-grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.sandbox{flex-direction:column}.sb-output{width:100%}.footer{flex-direction:column}.form-grid{grid-template-columns:1fr}.nav-links{gap:2px}}
+.theme-toggle{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-2);cursor:pointer;transition:all .15s;margin-left:4px;flex-shrink:0}.theme-toggle:hover{border-color:var(--border-l);color:var(--text);background:var(--bg-elevated)}
+.root.light .kw{color:#7c3aed}.root.light .fn{color:#2563eb}.root.light .st{color:#16a34a}.root.light .cm{color:#9ca3af;font-style:italic}.root.light .nb{color:#ea580c}.root.light .op{color:#0891b2}
+.root.light .nav-logo-mark{background:linear-gradient(135deg,#3563e9,#6d28d9)}
+.root.light .user-av{background:linear-gradient(135deg,#3563e9,#6d28d9)}
+.root.light .cw{box-shadow:0 16px 50px rgba(0,0,0,.08),0 0 30px rgba(53,99,233,.04)}
+.root.light .c-card:hover{box-shadow:0 10px 32px rgba(0,0,0,.08)}
+.root.light .notif{box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.root.light .user-menu{box-shadow:0 12px 32px rgba(0,0,0,.1)}
+.root.light .btn-hp{box-shadow:0 4px 18px rgba(53,99,233,.15)}
+.root.light .btn-hp:hover{box-shadow:0 6px 24px rgba(53,99,233,.2)}
+@media(max-width:768px){.hero{padding:50px 18px 40px}.nav{padding:0 14px}.section{padding:44px 18px}.feat-grid,.c-grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.sandbox{flex-direction:column}.sb-editor{width:100%!important}.sb-right{width:100%!important}.resize-handle-v{display:none}.sb-output{width:100%}.footer{flex-direction:column}.form-grid{grid-template-columns:1fr}.nav-links{gap:2px}}
       `}</style>
 
       {/* NAV */}
@@ -270,6 +348,7 @@ export default function DauiaApp() {
           <button className={`nav-l ${page==="catalog"?"act":""}`} onClick={() => navigate("catalog")}>{I.grid} Formations</button>
           <button className={`nav-l ${page==="sandbox"?"act":""}`} onClick={() => {if(!user){setAuthPage("login");return;} navigate("sandbox");}}>{I.terminal} Python Lab</button>
           {user?.role==="admin" && <button className={`nav-l ${page==="admin"?"act":""}`} onClick={() => navigate("admin")}>{I.settings} Admin</button>}
+          <button className="theme-toggle" onClick={toggleTheme} title={theme === "dark" ? "Mode clair" : "Mode sombre"}>{theme === "dark" ? I.sun : I.moon}</button>
           {user ? <UserMenu user={user} onLogout={() => {setUser(null);navigate("home");}} onAdmin={() => navigate("admin")} />
             : <button className="nav-cta" onClick={() => setAuthPage("login")}>Se connecter</button>}
         </div>
@@ -368,15 +447,23 @@ export default function DauiaApp() {
 
       {/* SANDBOX */}
       {page==="sandbox"&&(<div className="sandbox">
-        <div className="sb-editor">
+        <div className="sb-editor" style={{width: editorWidth + "%"}}>
           <div className="sb-header"><div style={{display:"flex",alignItems:"center",gap:7}}><div className="nav-logo-mark" style={{width:24,height:24,fontSize:10,borderRadius:6}}>d</div><span style={{fontWeight:600,fontSize:13}}>Python AI Sandbox</span></div><span style={{flex:1}} /><button className="btn-sm" onClick={() => setSandboxCode("")}>{I.trash} Vider</button><button className="btn-sm primary" onClick={runSandbox} disabled={isRunning}>{I.play} Exécuter</button></div>
           <div className="sb-libs">{["numpy","pandas","matplotlib","scikit-learn","scipy","seaborn","statsmodels"].map(l=>(<span key={l} className="sb-lib">{l}</span>))}</div>
           <div className="sb-editor-area"><div className="ln">{sandboxCode.split("\n").map((_,i)=><div key={i}>{i+1}</div>)}</div><textarea className="code-ta" value={sandboxCode} onChange={e => setSandboxCode(e.target.value)} onKeyDown={handleTab} spellCheck={false} /></div>
         </div>
-        <div className="sb-output">
-          <div className="sb-out-head">{I.terminal} Console</div>
-          <div className="sb-console">{isRunning?<span style={{color:"var(--text-m)",animation:"pulse 1.5s infinite"}}>⏳ Exécution...</span>:consoleOut||<span style={{color:"var(--text-m)"}}>{">>> "}Cliquez Exécuter pour lancer votre code.</span>}</div>
-          <div className="sb-status"><span>Python 3.11 · Pyodide (WASM)</span><span>numpy · pandas · sklearn · matplotlib</span></div>
+        <div className="resize-handle-v" onMouseDown={(e) => startDrag("vertical", e)}><div className="resize-dots-v" /></div>
+        <div className="sb-right" style={{width: (100 - editorWidth) + "%"}}>
+          <div className="sb-right-top" style={{height: (100 - terminalHeight) + "%"}}>
+            <div className="sb-out-head">{I.terminal} Console</div>
+            <div className="sb-console">{isRunning?<span style={{color:"var(--text-m)",animation:"pulse 1.5s infinite"}}>Execution...</span>:consoleOut||<span style={{color:"var(--text-m)"}}>{">>> "}Cliquez Executer pour lancer votre code.</span>}</div>
+          </div>
+          <div className="resize-handle-h" onMouseDown={(e) => startDrag("horizontal", e)}><div className="resize-dots-h" /></div>
+          <div className="sb-right-bottom" style={{height: terminalHeight + "%"}}>
+            <div className="sb-out-head">{I.terminal} Terminal</div>
+            <div className="sb-console" style={{color:"var(--success)"}}><span style={{color:"var(--text-m)"}}>dauia@sandbox</span>:<span style={{color:"var(--accent-b)"}}>~</span>$ {isRunning ? <span style={{animation:"pulse 1.5s infinite"}}>python main.py</span> : consoleOut ? "python main.py\n" + consoleOut : ""}</div>
+            <div className="sb-status"><span>Python 3.11 · Pyodide (WASM)</span><span>numpy · pandas · sklearn · matplotlib</span></div>
+          </div>
         </div>
       </div>)}
 
