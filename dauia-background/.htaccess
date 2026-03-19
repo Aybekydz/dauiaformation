@@ -1,0 +1,25 @@
+# ═══════════════════════════════════════════════════════════
+# DAU'IA — Rewrite toutes les requêtes /api/* vers api/index.php
+# ═══════════════════════════════════════════════════════════
+
+RewriteEngine On
+
+# Ne pas réécrire les fichiers/dossiers existants
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Tout /api/* → api/index.php
+RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
+# Sécurité : bloquer l'accès aux fichiers sensibles
+<FilesMatch "\.(env|json|log|sql|md)$">
+    Require all denied
+</FilesMatch>
+
+# Bloquer l'accès au dossier config
+<IfModule mod_rewrite.c>
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^logs/ - [F,L]
+    RewriteRule ^models/ - [F,L]
+    RewriteRule ^middleware/ - [F,L]
+</IfModule>
