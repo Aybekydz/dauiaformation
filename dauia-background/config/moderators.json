@@ -1,8 +1,9 @@
 {
-    "_comment": "Liste des modérateurs DAU'IA — Modifiez ce fichier pour ajouter/retirer des modérateurs. Tout email listé ici sera automatiquement promu modérateur à l'inscription ou à la prochaine connexion. Les emails retirés seront rétrogradés en étudiant à leur prochaine connexion.",
-    
+    "_comment": "Liste des modérateurs DAU'IA — Modifiez ce fichier pour ajouter/retirer des modérateurs. Tout email listé ici sera automatiquement promu au rôle 'moderateur' à l'inscription ou à la prochaine connexion. Les emails retirés seront rétrogradés en étudiant à leur prochaine connexion.",
+
     "moderators": [
-        "admin@dauphine.psl.eu",
-        "responsable.dauia@dauphine.psl.eu"
+        "aybek.yildiz@dauphine.eu",
+        "redouane.ouasti@dauphine.eu",
+        "lisa.tarlet@dauphine.eu"
     ]
 }
