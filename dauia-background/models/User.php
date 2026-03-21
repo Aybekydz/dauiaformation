@@ -226,7 +226,7 @@ class User {
         if (!$user) {
             // Timing constant pour ne pas révéler l'existence du compte
             password_verify($password, '$2y$12$fakehashtopreventtimingattacks000000000000000000000');
-            throw new InvalidArgumentException("Email ou mot de passe incorrect.");
+            throw new InvalidArgumentException("Identifiants incorrects.");
         }
 
         // ── Vérifier le verrouillage ──
@@ -240,7 +240,7 @@ class User {
         // ── Vérifier le mot de passe ──
         if (!password_verify($password, $user['password_hash'])) {
             $this->incrementFailedLogin($user['id'], $user['failed_login_count']);
-            throw new InvalidArgumentException("Email ou mot de passe incorrect.");
+            throw new InvalidArgumentException("Identifiants incorrects.");
         }
 
         // ── Vérifier que l'email est validé ──
@@ -533,11 +533,11 @@ HTML;
     }
 
     /**
-     * Envoyer un email via SMTP (ou mail() en fallback dev)
+     * Envoyer un email (dev → log, production → SMTP via PHPMailer ou mail() en fallback)
      */
     private function sendEmail(string $to, string $subject, string $htmlBody): void {
+        // ── Développement : log au lieu d'envoyer ──
         if (APP_ENV === 'development') {
-            // En dev : log l'email au lieu de l'envoyer
             $logDir = __DIR__ . '/../logs';
             if (!is_dir($logDir)) mkdir($logDir, 0755, true);
             $logFile = $logDir . '/emails.log';
@@ -551,20 +551,67 @@ HTML;
             return;
         }
 
-        // ── Production : envoi SMTP ──
-        // Utilise mail() avec les headers appropriés.
-        // Pour un vrai SMTP (Gmail, SendGrid, etc.), utilisez PHPMailer ou Symfony Mailer.
+        // ── Production : envoi SMTP via PHPMailer ──
+        if (class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
+            $this->sendWithPHPMailer($to, $subject, $htmlBody);
+            return;
+        }
+
+        // ── Fallback : mail() natif avec headers ──
+        error_log("[DAUIA] PHPMailer non installé — fallback sur mail(). Installez-le : composer require phpmailer/phpmailer");
         $headers = [
             'MIME-Version: 1.0',
             'Content-Type: text/html; charset=UTF-8',
-            'From: ' . SMTP_FROM_NAME . ' <' . SMTP_FROM_EMAIL . '>',
+            'From: =?UTF-8?B?' . base64_encode(SMTP_FROM_NAME) . '?= <' . SMTP_FROM_EMAIL . '>',
             'Reply-To: ' . SMTP_FROM_EMAIL,
             'X-Mailer: DAUIA-Platform/2.0',
         ];
 
-        if (!mail($to, $subject, $htmlBody, implode("\r\n", $headers))) {
-            error_log("Échec d'envoi d'email à {$to}");
-            // On ne throw pas pour ne pas bloquer l'inscription
+        if (!mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $htmlBody, implode("\r\n", $headers))) {
+            error_log("[DAUIA] Échec d'envoi d'email à {$to}");
+        }
+    }
+
+    /**
+     * Envoi SMTP authentifié via PHPMailer
+     */
+    private function sendWithPHPMailer(string $to, string $subject, string $htmlBody): void {
+        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+
+        try {
+            // ── Configuration SMTP ──
+            $mail->isSMTP();
+            $mail->Host       = SMTP_HOST;
+            $mail->Port       = SMTP_PORT;
+            $mail->CharSet    = 'UTF-8';
+
+            if (!empty(SMTP_USER) && !empty(SMTP_PASS)) {
+                $mail->SMTPAuth = true;
+                $mail->Username = SMTP_USER;
+                $mail->Password = SMTP_PASS;
+            }
+
+            if (SMTP_ENCRYPTION === 'tls') {
+                $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            } elseif (SMTP_ENCRYPTION === 'ssl') {
+                $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+            }
+
+            // ── Expéditeur & destinataire ──
+            $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+            $mail->addAddress($to);
+            $mail->addReplyTo(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+
+            // ── Contenu ──
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body    = $htmlBody;
+            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody));
+
+            $mail->send();
+        } catch (\PHPMailer\PHPMailer\Exception $e) {
+            error_log("[DAUIA] Échec SMTP vers {$to} : " . $e->getMessage());
+            // On ne throw pas pour ne pas bloquer l'inscription/reset
         }
     }
 }
