@@ -84,6 +84,8 @@ try {
 if ($method === 'POST' && $uri === '/api/auth/register') {
     checkRateLimit('register', RATE_LIMIT_REGISTER);
     $body = getJsonBody();
+    // SÉCURITÉ : on ignore tout champ "role" envoyé par le client.
+    // Le rôle est déterminé exclusivement côté serveur via moderators.json.
     $user = (new User())->register($body['name'] ?? '', $body['email'] ?? '', $body['password'] ?? '');
     jsonResponse(201, [
         'message' => 'Inscription réussie ! Vérifiez votre boîte email (et spam) pour activer votre compte.',
@@ -94,7 +96,13 @@ if ($method === 'POST' && $uri === '/api/auth/register') {
 if ($method === 'POST' && $uri === '/api/auth/login') {
     checkRateLimit('login', RATE_LIMIT_LOGIN);
     $body = getJsonBody();
-    $result = (new User())->login($body['email'] ?? '', $body['password'] ?? '');
+    try {
+        $result = (new User())->login($body['email'] ?? '', $body['password'] ?? '');
+    } catch (InvalidArgumentException $e) {
+        jsonResponse(401, ['error' => 'Identifiants incorrects.']);
+    } catch (RuntimeException $e) {
+        jsonResponse(401, ['error' => $e->getMessage()]);
+    }
     jsonResponse(200, ['message' => 'Connexion réussie.', 'user' => $result['user'], 'token' => $result['token']]);
 }
 
@@ -237,10 +245,11 @@ if ($method === 'GET' && $uri === '/api/admin/moderators') {
 
 if ($method === 'POST' && $uri === '/api/admin/sync-roles') {
     requireModerator();
+    // Recharge le fichier moderators.json pour prendre en compte les modifications récentes
     ModeratorList::reload();
     $db = Database::getConnection();
     $users = $db->query("SELECT id, email, role FROM users WHERE email_verified = TRUE")->fetchAll();
-    
+
     $promoted = $demoted = $unchanged = 0;
     foreach ($users as $u) {
         $expected = ModeratorList::getRoleForEmail($u['email']);
