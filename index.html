@@ -165,10 +165,6 @@ a{color:inherit;text-decoration:none}button{font-family:var(--font);cursor:point
 .btn-auth{width:100%;padding:11px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;margin-top:6px}.btn-auth:hover{background:var(--accent-b)}
 .auth-switch{text-align:center;margin-top:18px;font-size:12.5px;color:var(--text-m)}.auth-switch a{color:var(--accent-b);cursor:pointer;font-weight:500}.auth-switch a:hover{text-decoration:underline}
 .check-row{display:flex;align-items:center;gap:8px;margin:12px 0 4px;font-size:12.5px;color:var(--text-2);cursor:pointer}.check-row input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
-.role-select{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:18px}
-.role-opt{padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-surface);text-align:center;cursor:pointer;transition:all .15s}
-.role-opt:hover{border-color:var(--border-l)}.role-opt.sel{border-color:var(--accent);background:var(--accent-g)}
-.role-opt .ro-icon{font-size:24px;margin-bottom:4px}.role-opt .ro-label{font-size:12px;font-weight:600}.role-opt .ro-desc{font-size:10.5px;color:var(--text-m)}
 
 /* TIMELINE */
 .timeline{position:relative;padding-left:32px;margin-top:20px}
@@ -545,7 +541,7 @@ a{color:inherit;text-decoration:none}button{font-family:var(--font);cursor:point
   <div class="nav-links">
     <button class="nav-l" data-p="home" onclick="go('home')"> <span>Accueil</span></button>
     <button class="nav-l" data-p="catalog" onclick="go('catalog')"><span>Formations</span></button>
-    <button class="nav-l" data-p="sandbox" onclick="reqAuth('sandbox')"><span>Python Lab</span></button>
+    <button class="nav-l auth-only" data-p="sandbox" onclick="reqAuth('sandbox')" id="navSandbox" style="display:none"><span>Python Lab</span></button>
     <button class="nav-l" data-p="teacher" id="navTeacher" onclick="go('teacher')" style="display:none"><span>Gestion</span></button>
     <button class="nav-l" onclick="toggleTheme()" id="themeBtn" title="Changer le thème"><svg id="themeSun" width="15" height="15" viewBox="0 0 16 16" fill="none" style="display:none"><circle cx="8" cy="8" r="3.5" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg><svg id="themeMoon" width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.9 10.4A6 6 0 015.6 2.1a6 6 0 108.3 8.3z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div id="authArea"><button class="nav-cta" onclick="openAuth('login')">Se connecter</button></div>
@@ -562,14 +558,7 @@ a{color:inherit;text-decoration:none}button{font-family:var(--font);cursor:point
     <div class="auth-err hidden" id="authErr"></div>
     <form id="authForm" onsubmit="handleAuth(event)">
       <div class="field hidden" id="nameF"><label>Nom complet</label><input class="inp" id="aName" placeholder="Pr&eacute;nom Nom"></div>
-      <div id="roleF" class="hidden">
-        <label style="display:block;font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:8px">Je suis</label>
-        <div class="role-select">
-          <div class="role-opt sel" onclick="pickRole('etudiant',this)"><div class="ro-icon"><svg width="24" height="24" viewBox="0 0 16 16" fill="none"><path d="M8 1L1 5l7 4 7-4-7-4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M3 7v4c0 1.5 2.2 3 5 3s5-1.5 5-3V7" stroke="currentColor" stroke-width="1.2"/></svg></div><div class="ro-label">&Eacute;tudiant</div><div class="ro-desc">Suivre des cours</div></div>
-          <div class="role-opt" onclick="pickRole('enseignant',this)"><div class="ro-icon"><svg width="24" height="24" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="4" r="2.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 14c0-3 2.2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.2"/><path d="M11 3h4M13 1v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></div><div class="ro-label">Enseignant</div><div class="ro-desc">Cr&eacute;er des cours</div></div>
-          <div class="role-opt" onclick="pickRole('moderateur',this)"><div class="ro-icon"><svg width="24" height="24" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 4v4c0 3.5 2.5 6 6 7 3.5-1 6-3.5 6-7V4L8 1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></div><div class="ro-label">Mod&eacute;rateur</div><div class="ro-desc">G&eacute;rer la plateforme</div></div>
-        </div>
-      </div>
+      <!-- Rôle supprimé du formulaire : toujours "etudiant" par défaut, déterminé côté serveur -->
       <div class="field"><label>Email Dauphine</label><input class="inp" type="email" id="aEmail" placeholder="prenom.nom@dauphine.psl.eu" required></div>
       <div class="field"><label>Mot de passe</label><div class="field-wrap"><input class="inp" id="aPw" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" required style="padding-right:36px"><button type="button" class="pw-toggle" onclick="togglePw()"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/></svg></button></div></div>
       <div class="field hidden" id="confirmF"><label>Confirmer</label><input class="inp" id="aConfirm" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"></div>
@@ -594,7 +583,7 @@ a{color:inherit;text-decoration:none}button{font-family:var(--font);cursor:point
       </h1>
       <div class="hero-actions">
         <button class="btn-hero" onclick="go('catalog')">APPRENDRE</button>
-        <button class="btn-video" onclick="reqAuth('sandbox')">
+        <button class="btn-video auth-only" id="heroLabBtn" onclick="reqAuth('sandbox')" style="display:none">
           <span class="play-circle"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5 2l9 6-9 6V2z"/></svg></span>
           OUVRIR LE LAB
         </button>
@@ -628,18 +617,18 @@ a{color:inherit;text-decoration:none}button{font-family:var(--font);cursor:point
       </div>
       <div class="hero-stat">
         <div class="stat-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 4v4c0 3.5 2.5 6 6 7 3.5-1 6-3.5 6-7V4L8 1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
-        <span style="font-size:11.5px">Pratique garantie pour tous les &#233;tudiants ayant compl&#233;t&#233; le parcours</span>
+        <span style="font-size:11.5px">100% de nos &#233;tudiants valident leurs acquis par des projets concrets</span>
       </div>
     </div>
   </section>
 
-  <!-- ═══ CODAGE EXCEPTIONNEL - Hyprland Tiling ═══ -->
+  <!-- ═══ ESPACE DE TRAVAIL INTÉGRÉ ═══ -->
   <section class="hypr-section" id="hyprSection">
     <div class="hypr-header">
       <div class="hypr-header-left">
-        <div class="sec-label">Codage Exceptionnel</div>
-        <h2 class="sec-title">Votre workspace,<br>votre fa&ccedil;on</h2>
-        <p class="sec-desc">G&eacute;rez vos blocs cours, code et terminal comme un tiling window manager. Splittez, redimensionnez, organisez &mdash; comme sur Hyprland.</p>
+        <div class="sec-label">Espace de travail</div>
+        <h2 class="sec-title">Votre cours d'un c&ocirc;t&eacute;,<br>votre code de l'autre</h2>
+        <p class="sec-desc">Un espace de travail tout-en-un : votre cours d'un c&ocirc;t&eacute;, votre code de l'autre, sans friction. Organisez vos panneaux comme vous le souhaitez.</p>
       </div>
       <div class="hypr-header-right">
         <button class="hypr-mode-btn active" onclick="hyprSplit('h');this.parentElement.querySelectorAll('.hypr-mode-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">&#x2503; Horizontal</button>
@@ -660,7 +649,6 @@ a{color:inherit;text-decoration:none}button{font-family:var(--font);cursor:point
           <button class="hypr-add-btn" onclick="hyprAdd('cours')"><svg viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Cours</button>
           <button class="hypr-add-btn" onclick="hyprAdd('code')"><svg viewBox="0 0 16 16" fill="none"><path d="M5 4L1 8l4 4M11 4l4 4-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> Code</button>
           <button class="hypr-add-btn" onclick="hyprAdd('term')"><svg viewBox="0 0 16 16" fill="none"><path d="M4 6l3 2-3 2M8 12h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> Terminal</button>
-          <span class="hypr-shortcut"><kbd>Ctrl</kbd>+<kbd>H</kbd> split &middot; <kbd>Ctrl</kbd>+<kbd>W</kbd> fermer</span>
         </div>
       </div>
     </div>
@@ -684,7 +672,7 @@ a{color:inherit;text-decoration:none}button{font-family:var(--font);cursor:point
 
   <footer class="footer">
     <div class="footer-brand"><div style="display:flex;align-items:center;gap:8px"><img src="logo.png" alt="DAU'IA" style="height:28px;filter:brightness(1.1)"></div><p>Plateforme IA &amp; Data Science &mdash; Paris-Dauphine PSL.</p></div>
-    <div class="footer-links"><div class="footer-col"><h5>Plateforme</h5><a onclick="go('catalog')">Formations</a><a onclick="reqAuth('sandbox')">Python Lab</a></div><div class="footer-col"><h5>Universit&eacute;</h5><a href="https://dauphine.psl.eu" target="_blank">Dauphine PSL</a></div></div>
+    <div class="footer-links"><div class="footer-col"><h5>Plateforme</h5><a onclick="go('catalog')">Formations</a><a class="auth-only" id="footerLabLink" onclick="reqAuth('sandbox')" style="display:none">Python Lab</a></div><div class="footer-col"><h5>Universit&eacute;</h5><a href="https://dauphine.psl.eu" target="_blank">Dauphine PSL</a></div></div>
   </footer>
 </div>
 
@@ -698,14 +686,14 @@ a{color:inherit;text-decoration:none}button{font-family:var(--font);cursor:point
         EN <span class="cb-acc">DATA SCIENCE</span><br>
         &amp; IA
       </h1>
-      <p class="cb-hero-sub">Parcours cr&eacute;&eacute;s par les enseignants de Dauphine. Code first, th&eacute;orie incluse. Chaque formation m&ecirc;le cours, exercices de code et projets pratiques.</p>
+      <p class="cb-hero-sub">Parcours cr&eacute;&eacute;s par l'association DAU'IA. Code first, th&eacute;orie incluse. Chaque formation m&ecirc;le cours, exercices de code et projets pratiques.</p>
       <div class="cb-hero-actions">
-        <button class="cb-btn" onclick="reqAuth('sandbox')">OUVRIR LE LAB</button>
+        <button class="cb-btn auth-only" id="catalogLabBtn" onclick="reqAuth('sandbox')" style="display:none">OUVRIR LE LAB</button>
         <button class="cb-btn cb-btn-ghost" onclick="go('home')">ACCUEIL</button>
       </div>
-      <div class="cb-stats">
-        <div class="cb-stat"><strong id="cbStatCount">0</strong> formations</div>
-        <div class="cb-stat"><strong id="cbStatSteps">0</strong> &eacute;tapes</div>
+      <div class="cb-stats" id="cbStatsBar">
+        <div class="cb-stat" id="cbStatCountWrap"><strong id="cbStatCount">0</strong> formations</div>
+        <div class="cb-stat" id="cbStatStepsWrap"><strong id="cbStatSteps">0</strong> &eacute;tapes</div>
         <div class="cb-stat"><strong>100%</strong> pratique</div>
       </div>
     </div>
@@ -793,21 +781,44 @@ const SVG={
   doc:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 1h7l3 3v11H3V1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M10 1v3h3" stroke="currentColor" stroke-width="1.2"/></svg>'
 };
 /* ═══════ STATE ═══════ */
-const S={user:null,courses:JSON.parse(localStorage.getItem('d_courses')||'[]'),authMode:'login',authRole:'etudiant',editCourse:null,viewCourseId:null,viewStepIdx:0,sbTabName:'console'};
+const S={user:null,courses:[],enrollments:[],coursesLoading:true,authMode:'login',editCourse:null,viewCourseId:null,viewStepIdx:0,sbTabName:'console'};
+
+function getAuthHeaders(json){const h={};const t=localStorage.getItem('dauia-token');if(t)h['Authorization']='Bearer '+t;if(json)h['Content-Type']='application/json';return h;}
+
+async function loadCourses(){
+  S.coursesLoading=true;
+  try{
+    const endpoint=S.user?.role==='moderateur'?'/api/admin/courses':'/api/courses';
+    const res=await fetch(endpoint,{headers:getAuthHeaders()});
+    if(!res.ok){S.courses=[];return;}
+    const data=await res.json();
+    S.courses=data.courses||[];
+  }catch{S.courses=[];}
+  finally{S.coursesLoading=false;renderHome();renderCatalog();}
+}
+
+async function loadEnrollments(){
+  if(!S.user){S.enrollments=[];return;}
+  try{
+    const res=await fetch('/api/enrollments',{headers:getAuthHeaders()});
+    if(!res.ok)return;
+    const data=await res.json();
+    S.enrollments=data.enrollments||[];
+  }catch{}
+}
 
 /* ═══════ NAV ═══════ */
 function go(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));const el=document.getElementById('page-'+p);if(el){el.classList.add('active');el.style.animation='none';el.offsetHeight;el.style.animation='';}document.querySelectorAll('.nav-l').forEach(l=>l.classList.toggle('act',l.dataset.p===p));window.scrollTo(0,0);if(p==='catalog')renderCatalog();if(p==='teacher')renderTeacher();if(p==='home')renderHome();if(p==='sandbox')initSb();if(p==='course')renderCourseView();}
 function reqAuth(p){if(!S.user){openAuth('login');return;}go(p);}
 
 /* ═══════ AUTH ═══════ */
-function openAuth(m){S.authMode=m;document.getElementById('authModal').classList.remove('hidden');document.getElementById('authErr').classList.add('hidden');document.getElementById('authTitle').textContent=m==='login'?'Connexion':'Créer un compte';document.getElementById('authSub').textContent=m==='login'?"Accédez à votre espace DAU'IA.":"Rejoignez la communauté DAU'IA.";document.getElementById('nameF').classList.toggle('hidden',m==='login');document.getElementById('roleF').classList.toggle('hidden',m==='login');document.getElementById('confirmF').classList.toggle('hidden',m==='login');document.getElementById('authBtn').textContent=m==='login'?'Se connecter':'Créer mon compte';document.getElementById('authSw').innerHTML=m==='login'?"Pas de compte ? <a onclick=\"switchAuth()\">S'inscrire</a>":"Déjà un compte ? <a onclick=\"switchAuth()\">Se connecter</a>";document.getElementById('aPw').type='password';}
+function openAuth(m){S.authMode=m;document.getElementById('authModal').classList.remove('hidden');document.getElementById('authErr').classList.add('hidden');document.getElementById('authTitle').textContent=m==='login'?'Connexion':'Créer un compte';document.getElementById('authSub').textContent=m==='login'?"Accédez à votre espace DAU'IA.":"Rejoignez la communauté DAU'IA.";document.getElementById('nameF').classList.toggle('hidden',m==='login');document.getElementById('confirmF').classList.toggle('hidden',m==='login');document.getElementById('authBtn').textContent=m==='login'?'Se connecter':'Créer mon compte';document.getElementById('authSw').innerHTML=m==='login'?"Pas de compte ? <a onclick=\"switchAuth()\">S'inscrire</a>":"Déjà un compte ? <a onclick=\"switchAuth()\">Se connecter</a>";document.getElementById('aPw').type='password';}
 function closeAuth(e){if(e&&e.target!==e.currentTarget)return;document.getElementById('authModal').classList.add('hidden');document.getElementById('authForm').reset();}
 function switchAuth(){openAuth(S.authMode==='login'?'register':'login');}
 function togglePw(){const i=document.getElementById('aPw');i.type=i.type==='password'?'text':'password';}
-function pickRole(r,el){S.authRole=r;document.querySelectorAll('.role-opt').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}
 function isDaupEmail(e){return/^[a-zA-Z0-9._%+-]+@(dauphine\.psl\.eu|dauphine\.eu|dauphine\.psl\.fr)$/i.test(e);}
 
-function handleAuth(e){
+async function handleAuth(e){
   e.preventDefault();const err=document.getElementById('authErr');err.classList.add('hidden');
   const email=document.getElementById('aEmail').value.trim().toLowerCase(),pw=document.getElementById('aPw').value,name=document.getElementById('aName').value.trim(),confirm=document.getElementById('aConfirm').value;
   if(!isDaupEmail(email)){err.textContent='Seules les adresses @dauphine.psl.eu sont acceptées.';err.classList.remove('hidden');return;}
@@ -816,37 +827,71 @@ function handleAuth(e){
     if(!name){err.textContent='Le nom est requis.';err.classList.remove('hidden');return;}
     if(pw.length<8){err.textContent='Minimum 8 caractères.';err.classList.remove('hidden');return;}
     if(pw!==confirm){err.textContent='Les mots de passe ne correspondent pas.';err.classList.remove('hidden');return;}
-    S.user={email,name,role:S.authRole};
-  }else{S.user={email,name:email.split('@')[0].replace('.',' '),role:localStorage.getItem('d_role_'+email)||'etudiant'};}
-  if(document.getElementById('aRemember').checked){localStorage.setItem('d_user',JSON.stringify(S.user));localStorage.setItem('d_role_'+email,S.user.role);}
-  closeAuth();updateAuthUI();toast('✓ Connecté en tant que '+S.user.name);
+  }
+  const btn=document.getElementById('authBtn');btn.disabled=true;btn.textContent='Connexion en cours...';
+  try{
+    const endpoint=S.authMode==='register'?'/api/auth/register':'/api/auth/login';
+    const payload=S.authMode==='register'?{name,email,password:pw}:{email,password:pw};
+    const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){err.textContent=data.error||data.message||'Identifiants incorrects.';err.classList.remove('hidden');return;}
+    if(S.authMode==='register'){
+      toast(data.message||'Inscription réussie ! Vérifiez votre email.');
+      openAuth('login');return;
+    }
+    if(!data.token){err.textContent='Erreur serveur : aucun token reçu.';err.classList.remove('hidden');return;}
+    localStorage.setItem('dauia-token',data.token);
+    if(document.getElementById('aRemember').checked){localStorage.setItem('d_user',JSON.stringify(data.user));}
+    S.user=data.user;
+    closeAuth();updateAuthUI();toast('✓ Connecté en tant que '+(S.user.name||''));
+    loadCourses();loadEnrollments();
+  }catch(ex){err.textContent='Impossible de contacter le serveur.';err.classList.remove('hidden');}
+  finally{btn.disabled=false;btn.textContent=S.authMode==='login'?'Se connecter':'Créer mon compte';}
 }
-function logout(){S.user=null;localStorage.removeItem('d_user');updateAuthUI();go('home');toast('Déconnecté.');}
+function logout(){const t=localStorage.getItem('dauia-token');if(t)fetch('/api/auth/logout',{method:'POST',headers:{'Authorization':'Bearer '+t}}).catch(()=>{});S.user=null;localStorage.removeItem('d_user');localStorage.removeItem('dauia-token');updateAuthUI();go('home');toast('Déconnecté.');}
 
 function updateAuthUI(){
   const a=document.getElementById('authArea'),t=document.getElementById('navTeacher');
+  // Afficher/masquer les éléments réservés aux utilisateurs connectés
+  document.querySelectorAll('.auth-only').forEach(el=>{el.style.display=S.user?'':'none';});
   if(S.user){
-    const ini=(S.user.name||'U')[0].toUpperCase();const isT=S.user.role==='enseignant';const isM=S.user.role==='moderateur';const canManage=isT||isM;const roleCls=isM?'role-mod':isT?'role-ens':'role-etu';const roleLabel=isM?'Modérateur':isT?'Enseignant':'Étudiant';
+    const ini=(S.user.name||'U')[0].toUpperCase();const isM=S.user.role==='moderateur';const canManage=isM;const roleCls=isM?'role-mod':'role-etu';const roleLabel=isM?'Modérateur':'Étudiant';
     a.innerHTML='<div style="position:relative"><div class="user-pill" onclick="toggleDD()"><div class="user-av">'+ini+'</div>'+esc(S.user.name.split(' ')[0])+'</div><div class="user-dd hidden" id="udd"><div class="user-dd-info"><div class="n">'+esc(S.user.name)+'</div><div class="e">'+esc(S.user.email)+'</div><span class="role-badge '+roleCls+'">'+roleLabel+'</span></div>'+(canManage?'<button onclick="go(\'teacher\');closeDD()">'+SVG.gear+' Gestion des formations</button>':'')+'<button onclick="logout()">↪ Déconnexion</button></div></div>';
     t.style.display=canManage?'':'none';
   }else{a.innerHTML='<button class="nav-cta" onclick="openAuth(\'login\')">Se connecter</button>';t.style.display='none';}
 }
 function toggleDD(){const d=document.getElementById('udd');if(d)d.classList.toggle('hidden');}
 function closeDD(){const d=document.getElementById('udd');if(d)d.classList.add('hidden');}
-function restoreSession(){const u=localStorage.getItem('d_user');if(u){try{S.user=JSON.parse(u);updateAuthUI();}catch(e){localStorage.removeItem('d_user');}}}
+function restoreSession(){const token=localStorage.getItem('dauia-token');if(token){fetch('/api/auth/me',{headers:{'Authorization':'Bearer '+token}}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{if(data.user){S.user=data.user;localStorage.setItem('d_user',JSON.stringify(data.user));updateAuthUI();loadCourses();loadEnrollments();}else{localStorage.removeItem('dauia-token');localStorage.removeItem('d_user');loadCourses();}}).catch(()=>{localStorage.removeItem('dauia-token');localStorage.removeItem('d_user');loadCourses();});}else{loadCourses();}}
 document.addEventListener('click',e=>{const d=document.getElementById('udd');const p=document.querySelector('.user-pill');if(d&&p&&!p.contains(e.target)&&!d.contains(e.target))d.classList.add('hidden');});
 
 /* ═══════ COURSES CRUD ═══════ */
-function saveC(){localStorage.setItem('d_courses',JSON.stringify(S.courses));}
-function addC(d){const c={...d,id:'c'+Date.now(),steps:d.steps||[],createdAt:new Date().toISOString(),author:S.user?.name||'',authorEmail:S.user?.email||''};S.courses.push(c);saveC();return c;}
-function updC(id,d){const i=S.courses.findIndex(c=>c.id===id);if(i>=0){S.courses[i]={...S.courses[i],...d};saveC();}}
-function delC(id){S.courses=S.courses.filter(c=>c.id!==id);saveC();}
+function flatSteps(c){if(c.modules?.length)return c.modules.flatMap(m=>m.steps||[]);if(c.steps?.length)return c.steps;return [];}
+async function addC(d){
+  try{const res=await fetch('/api/admin/courses',{method:'POST',headers:getAuthHeaders(true),body:JSON.stringify({...d,is_published:d.is_published??true})});
+  const data=await res.json().catch(()=>({}));if(!res.ok){toast(data.error||'Erreur de création.');return null;}
+  await loadCourses();return data.course;}catch{toast('Impossible de contacter le serveur.');return null;}
+}
+async function updC(id,d){
+  try{const res=await fetch('/api/admin/courses/'+id,{method:'PUT',headers:getAuthHeaders(true),body:JSON.stringify({...d,is_published:d.is_published??true})});
+  const data=await res.json().catch(()=>({}));if(!res.ok){toast(data.error||'Erreur de mise à jour.');return;}
+  await loadCourses();}catch{toast('Impossible de contacter le serveur.');}
+}
+async function delC(id){
+  try{const res=await fetch('/api/admin/courses/'+id,{method:'DELETE',headers:getAuthHeaders()});
+  if(!res.ok){const data=await res.json().catch(()=>({}));toast(data.error||'Erreur de suppression.');return;}
+  await loadCourses();toast('Formation supprimée.');}catch{toast('Impossible de contacter le serveur.');}
+}
 
 /* ═══════ RENDER HOME ═══════ */
 function renderHome(){
   const sec=document.getElementById('homeCourses'),grid=document.getElementById('homeGrid');
+  if(S.coursesLoading){sec.style.display='';grid.innerHTML='<p style="color:rgba(255,255,255,.4);text-align:center;grid-column:1/-1">Chargement des formations...</p>';return;}
   if(!S.courses.length){sec.style.display='none';return;}
-  sec.style.display='';grid.innerHTML=S.courses.slice(0,3).map((c,i)=>'<div class="c-card" style="animation:fadeUp .4s '+i*.08+'s both" onclick="viewCourse(\''+c.id+'\')"><div class="c-card-icon">'+(SVG[c.icon]||SVG.book)+'</div><h3>'+esc(c.title)+'</h3><p>'+esc(c.subtitle||'')+'</p><div class="c-meta">'+(c.steps?.length?'<span>'+c.steps.length+' étapes</span>':'')+'<span>'+esc(c.level||'')+'</span></div></div>').join('');
+  sec.style.display='';grid.innerHTML=S.courses.slice(0,3).map((c,i)=>{
+    const enr=S.enrollments.find(e=>e.course_id===c.id);const pct=enr?.progress?.percentage||0;const stepCount=c.step_count||flatSteps(c).length;
+    return '<div class="c-card" style="animation:fadeUp .4s '+i*.08+'s both" onclick="viewCourse(\''+c.id+'\')"><div class="c-card-icon">'+(SVG[c.icon]||SVG.book)+'</div><h3>'+esc(c.title)+'</h3><p>'+esc(c.subtitle||'')+'</p><div class="c-meta">'+(stepCount?'<span>'+stepCount+' étapes</span>':'')+'<span>'+esc(c.level||'')+'</span></div>'+(enr?'<div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:6px">'+pct+'% complété</div>':'')+'</div>';
+  }).join('');
 }
 
 /* ═══════ RENDER CATALOG (CODEBITE) ═══════ */
@@ -862,34 +907,60 @@ function renderCatalog(){
   // Update stats
   const statCount=document.getElementById('cbStatCount');
   const statSteps=document.getElementById('cbStatSteps');
-  if(statCount)statCount.textContent=S.courses.length;
-  if(statSteps)statSteps.textContent=S.courses.reduce((a,c)=>a+(c.steps?.length||0),0);
+  const statCountWrap=document.getElementById('cbStatCountWrap');
+  const statStepsWrap=document.getElementById('cbStatStepsWrap');
+  const totalCourses=S.courses.length;
+  const totalSteps=S.courses.reduce((a,c)=>a+(c.step_count||flatSteps(c).length),0);
+  if(statCount)statCount.textContent=totalCourses;
+  if(statSteps)statSteps.textContent=totalSteps;
+  // Masquer les compteurs à zéro et afficher un message alternatif
+  if(statCountWrap)statCountWrap.style.display=totalCourses>0?'':'none';
+  if(statStepsWrap)statStepsWrap.style.display=totalSteps>0?'':'none';
+  if(totalCourses===0&&statCountWrap){statCountWrap.style.display='';statCountWrap.innerHTML='<strong>Nouveaux parcours &agrave; venir</strong>';}
 
   const filtered=cbCurrentFilter==='all'?S.courses:S.courses.filter(c=>(c.level||'').toLowerCase().includes(cbCurrentFilter));
 
   if(!filtered.length){
-    const canCreate=S.user?.role==='enseignant'||S.user?.role==='moderateur';
+    const canCreate=S.user?.role==='moderateur';
     el.innerHTML='<div class="cb-empty"><div class="cb-empty-icon">'+SVG.mailbox+'</div><p style="font-size:14px;font-weight:600;color:rgba(255,255,255,.5)">Aucune formation disponible.</p>'+(canCreate?'<button class="cb-btn" style="margin-top:20px" onclick="go(\'teacher\')">+ Cr\u00e9er une formation</button>':'<p style="font-size:12px;margin-top:8px;color:rgba(255,255,255,.2)">Les formations seront publi\u00e9es prochainement.</p>')+'</div>';
     return;
   }
   el.innerHTML='<div class="cb-grid">'+filtered.map((c,i)=>{
-    const stepCount=c.steps?.filter(s=>s.title).length||0;
-    return '<div class="cb-card" style="animation:fadeUp .35s '+i*.06+'s both" onclick="viewCourse(\''+c.id+'\')"><div class="cb-card-inner"><div class="cb-card-type"><span class="cb-card-icon">'+(SVG[c.icon]||SVG.book)+'</span> '+esc(c.level||'Formation')+'</div><h3>'+esc(c.title)+'</h3><p>'+esc(c.subtitle||'')+'</p><div class="cb-card-meta">'+(c.duration?'<span>'+SVG.hourglass+' '+esc(c.duration)+'</span>':'')+(stepCount?'<span>'+stepCount+' \u00e9tapes</span>':'')+'</div>'+(c.tags?.length?'<div class="cb-card-tags">'+c.tags.map(t=>'<span>'+esc(t)+'</span>').join('')+'</div>':'')+'</div></div>';
+    const stepCount=c.step_count||flatSteps(c).filter(s=>s.title).length||0;
+    const enr=S.enrollments.find(e=>e.course_id===c.id);const pct=enr?.progress?.percentage||0;
+    return '<div class="cb-card" style="animation:fadeUp .35s '+i*.06+'s both" onclick="viewCourse(\''+c.id+'\')"><div class="cb-card-inner"><div class="cb-card-type"><span class="cb-card-icon">'+(SVG[c.icon]||SVG.book)+'</span> '+esc(c.level||'Formation')+'</div><h3>'+esc(c.title)+'</h3><p>'+esc(c.subtitle||'')+'</p><div class="cb-card-meta">'+(c.duration?'<span>'+SVG.hourglass+' '+esc(c.duration)+'</span>':'')+(stepCount?'<span>'+stepCount+' \u00e9tapes</span>':'')+'</div>'+(c.tags?.length?'<div class="cb-card-tags">'+c.tags.map(t=>'<span>'+esc(t)+'</span>').join('')+'</div>':'')+(enr?'<div style="margin-top:8px;font-size:11px;color:rgba(255,255,255,.4)">'+pct+'% complété</div>':'<div style="margin-top:8px;font-size:11px;color:#00D2FF">Commencer ce parcours</div>')+'</div></div>';
   }).join('')+'</div>';
 }
 
 /* ═══════ COURSE VIEW (IBM Training + Codecademy) ═══════ */
-function viewCourse(id){S.viewCourseId=id;S.viewStepIdx=0;go('course');}
+async function viewCourse(id){
+  if(!S.user){openAuth('login');return;}
+  S.viewCourseId=id;S.viewStepIdx=0;
+  // Enroll if not already
+  const alreadyEnrolled=S.enrollments.some(e=>e.course_id===id);
+  if(!alreadyEnrolled){
+    try{await fetch('/api/enrollments',{method:'POST',headers:getAuthHeaders(true),body:JSON.stringify({course_id:id})});}catch{}
+    await loadEnrollments();
+  }
+  // Fetch full course with modules/steps
+  try{
+    const res=await fetch('/api/courses/'+id,{headers:getAuthHeaders()});
+    if(res.ok){const data=await res.json();if(data.course){S.viewCourse=data.course;}}
+  }catch{}
+  go('course');
+}
 
 function renderCourseView(){
-  const c=S.courses.find(x=>x.id===S.viewCourseId);const box=document.getElementById('courseViewBox');
-  if(!c||!c.steps?.length){box.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-m)"><div style="text-align:center"><p style="font-size:48px;margin-bottom:16px">'+SVG.mailbox+'</p><p>Formation introuvable ou vide.</p><button class="btn-sm" onclick="go(\'catalog\')" style="margin-top:14px">← Catalogue</button></div></div>';return;}
-  const prog=JSON.parse(localStorage.getItem('d_prog_'+c.id)||'[]');
-  const pct=Math.round(prog.length/c.steps.length*100);
-  const idx=Math.min(S.viewStepIdx||0,c.steps.length-1);
-  const step=c.steps[idx];
-  const done=prog.includes(idx);
-  const tc=step.type==='video'?'video':step.type==='lesson'?'lesson':'code';
+  const c=S.viewCourse||S.courses.find(x=>x.id===S.viewCourseId);const box=document.getElementById('courseViewBox');
+  const allSteps=flatSteps(c||{});
+  if(!c||!allSteps.length){box.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-m)"><div style="text-align:center"><p style="font-size:48px;margin-bottom:16px">'+SVG.mailbox+'</p><p>Formation introuvable ou vide.</p><button class="btn-sm" onclick="go(\'catalog\')" style="margin-top:14px">← Catalogue</button></div></div>';return;}
+  const enr=S.enrollments.find(e=>e.course_id===c.id);
+  const completedStepIds=enr?.progress?.steps?.filter(s=>s.completed).map(s=>s.step_id)||[];
+  const pct=enr?.progress?.percentage||0;
+  const idx=Math.min(S.viewStepIdx||0,allSteps.length-1);
+  const step=allSteps[idx];
+  const done=completedStepIds.includes(step.id);
+  const tc=(step.step_type||step.type)==='video'?'video':(step.step_type||step.type)==='lesson'?'lesson':'code';
 
   // ── Sidebar ──
   let sb='<div class="cv-sidebar"><div class="cv-sidebar-head">';
@@ -897,11 +968,12 @@ function renderCourseView(){
   sb+='<p>'+esc(c.subtitle||'')+'</p>';
   sb+='<div class="cv-sidebar-progress"><div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:'+pct+'%"></div></div>'+pct+'%</div>';
   sb+='</div><div class="cv-sidebar-list">';
-  c.steps.forEach((s,i)=>{
-    const d=prog.includes(i);const act=i===idx;
-    const stc=s.type==='video'?'video':s.type==='lesson'?'lesson':'code';
-    const typeLabel=s.type==='video'?'Vidéo':s.type==='lesson'?'Leçon':'Code';
-    const typeIcon=s.type==='video'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg>':s.type==='lesson'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>':'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,18 22,12 16,6"/><polyline points="8,6 2,12 8,18"/></svg>';
+  allSteps.forEach((s,i)=>{
+    const d=completedStepIds.includes(s.id);const act=i===idx;
+    const stype=s.step_type||s.type||'lesson';
+    const stc=stype==='video'?'video':stype==='lesson'?'lesson':'code';
+    const typeLabel=stype==='video'?'Vidéo':stype==='lesson'?'Leçon':'Code';
+    const typeIcon=stype==='video'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg>':stype==='lesson'?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>':'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,18 22,12 16,6"/><polyline points="8,6 2,12 8,18"/></svg>';
     const checkSvg='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>';
     sb+='<button class="cv-nav-item'+(act?' active':'')+(d?' done':'')+'" onclick="goStep('+i+')">';
     sb+='<div class="cv-nav-num">'+(d?checkSvg:(i+1))+'</div>';
@@ -914,21 +986,21 @@ function renderCourseView(){
   let main='<div class="cv-main">';
 
   // Section header — MODULE DE COURS for lesson/video, WORKSPACE IDE for code
-  const headerLabel=step.type==='code'?'Workspace IDE':'Module de cours';
+  const headerLabel=tc==='code'?'Workspace IDE':'Module de cours';
   main+='<div class="cv-main-header"><span class="cv-main-header-label">'+headerLabel+' :</span><span class="cv-main-header-title">'+esc(c.title)+'</span></div>';
 
   // Top bar
   main+='<div class="cv-topbar">';
-  main+='<span class="cv-topbar-type '+tc+'">'+(step.type==='video'?'Vidéo':step.type==='lesson'?'Leçon':'Exercice code')+'</span>';
+  main+='<span class="cv-topbar-type '+tc+'">'+(tc==='video'?'Vidéo':tc==='lesson'?'Leçon':'Exercice code')+'</span>';
   main+='<span class="cv-topbar-title">'+esc(step.title||'')+'</span>';
   main+='<div class="cv-topbar-nav">';
   main+='<button onclick="goStep('+(idx-1)+')" '+(idx<=0?'disabled':'')+' title="Précédent">←</button>';
-  main+='<span style="font-size:12px;color:#666;padding:0 6px">'+(idx+1)+'/'+c.steps.length+'</span>';
-  main+='<button onclick="goStep('+(idx+1)+')" '+(idx>=c.steps.length-1?'disabled':'')+' title="Suivant">→</button>';
+  main+='<span style="font-size:12px;color:#666;padding:0 6px">'+(idx+1)+'/'+allSteps.length+'</span>';
+  main+='<button onclick="goStep('+(idx+1)+')" '+(idx>=allSteps.length-1?'disabled':'')+' title="Suivant">→</button>';
   main+='</div></div>';
 
   // ── Content depends on type ──
-  if(step.type==='code'){
+  if(tc==='code'){
     // ═══ WORKSPACE IDE — CLEAN SPLIT PANE ═══
     const codeVal=step.code||'# Votre code ici\n';
     main+='<div class="cc-workspace">';
@@ -975,10 +1047,10 @@ function renderCourseView(){
     main+='<div class="ws-btn-group">';
     if(!done)main+='<button class="cc-ws-btn-done" onclick="markDone(\''+c.id+'\','+idx+')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Marquer terminé</button>';
     main+='<button class="cc-ws-btn-run" onclick="runCcCode()"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> Exécuter</button>';
-    if(idx<c.steps.length-1)main+='<button class="cc-ws-btn-next" onclick="goStep('+(idx+1)+')">SUIVANT <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>';
+    if(idx<allSteps.length-1)main+='<button class="cc-ws-btn-next" onclick="goStep('+(idx+1)+')">SUIVANT <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>';
     main+='</div></div>';
     main+='</div>'; // end cc-workspace
-  } else if(step.type==='video') {
+  } else if(tc==='video') {
     // ═══ VIDEO — CUSTOM PLAYER + DYNAMIC TABS ═══
     main+='<div class="cv-content" style="max-width:900px">';
     main+='<h2>'+esc(step.title||'')+'</h2>';
@@ -1079,7 +1151,7 @@ function renderCourseView(){
     main+='<div style="display:flex;gap:8px;align-items:center">';
     if(done)main+='<span class="done-label">✓ Terminé</span>';
     else main+='<button class="btn-sm success" onclick="markDone(\''+c.id+'\','+idx+')">✓ Marquer terminé</button>';
-    if(idx<c.steps.length-1)main+='<button class="btn-nav-next" onclick="goStep('+(idx+1)+')">Suivant →</button>';
+    if(idx<allSteps.length-1)main+='<button class="btn-nav-next" onclick="goStep('+(idx+1)+')">Suivant →</button>';
     else if(pct>=100)main+='<span style="font-size:13px;font-weight:600;color:var(--warn)">'+SVG.trophy+' Formation terminée !</span>';
     main+='</div></div>';
 
@@ -1097,7 +1169,7 @@ function renderCourseView(){
     main+='<div class="ws-status"><span style="font-family:Poppins,sans-serif;font-size:12px;color:#7A7F8E">'+(done?'✓ Étape terminée':'En cours')+'</span></div>';
     main+='<div style="display:flex;gap:10px;align-items:center">';
     if(!done)main+='<button class="cc-ws-btn-done" onclick="markDone(\''+c.id+'\','+idx+')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Marquer terminé</button>';
-    if(idx<c.steps.length-1)main+='<button class="cc-ws-btn-next" onclick="goStep('+(idx+1)+')">SUIVANT <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>';
+    if(idx<allSteps.length-1)main+='<button class="cc-ws-btn-next" onclick="goStep('+(idx+1)+')">SUIVANT <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>';
     else if(pct>=100)main+='<span style="font-family:Poppins,sans-serif;font-size:13px;font-weight:600;color:#fbbf24">'+SVG.trophy+' Formation terminée !</span>';
     main+='</div></div>';
   }
@@ -1106,14 +1178,14 @@ function renderCourseView(){
   box.innerHTML=sb+main;
 
   // Init code editor line numbers if code step
-  if(step.type==='code')initCcEditor();
+  if(tc==='code')initCcEditor();
   // Init PiP drag for video step
-  if(step.type==='video')cvInitPip();
+  if(tc==='video')cvInitPip();
 }
 
 function goStep(i){
-  const c=S.courses.find(x=>x.id===S.viewCourseId);
-  if(!c||i<0||i>=c.steps.length)return;
+  const c=S.viewCourse||S.courses.find(x=>x.id===S.viewCourseId);
+  if(!c||i<0||i>=flatSteps(c).length)return;
   S.viewStepIdx=i;renderCourseView();
 }
 
@@ -1151,7 +1223,16 @@ async function runCcCode(){
   out.textContent=result;
 }
 
-function markDone(cid,idx){let p=JSON.parse(localStorage.getItem('d_prog_'+cid)||'[]');if(!p.includes(idx))p.push(idx);localStorage.setItem('d_prog_'+cid,JSON.stringify(p));renderCourseView();}
+async function markDone(cid,idx){
+  const c=S.viewCourse||S.courses.find(x=>x.id===cid);
+  const allSteps=flatSteps(c||{});
+  const step=allSteps[idx];
+  if(step?.id){
+    try{await fetch('/api/progress/'+step.id,{method:'POST',headers:getAuthHeaders()});}catch{}
+    await loadEnrollments();
+  }
+  renderCourseView();
+}
 function parseYT(u){const m=u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);return m?m[1]:null;}
 
 /* ═══════ COURSE VIEW — VIDEO PLAYER & TABS ═══════ */
@@ -1223,9 +1304,9 @@ function cvInitPip(){
 }
 
 /* ═══════ FILE EXTRACT (PDF / DOCX) ═══════ */
-function extractFileContent(input, stepIdx){
+function extractFileContent(input, modIdx, stepIdx){
   var file=input.files[0];if(!file)return;
-  var statusEl=document.getElementById('fileStatus'+stepIdx);
+  var statusEl=document.getElementById('fileStatus'+modIdx+'_'+stepIdx);
   var ext=file.name.split('.').pop().toLowerCase();
   if(statusEl)statusEl.textContent='Extraction en cours...';
   if(ext==='pdf'){
@@ -1244,8 +1325,8 @@ function extractFileContent(input, stepIdx){
                 text+=(pageNum>1?'\n\n':'')+pageText;
                 done++;
                 if(done===pages){
-                  S.editCourse.steps[stepIdx].content=text;
-                  var ta=document.getElementById('lessonContent'+stepIdx);
+                  S.editCourse.modules[modIdx].steps[stepIdx].content=text;
+                  var ta=document.getElementById('lessonContent'+modIdx+'_'+stepIdx);
                   if(ta)ta.value=text;
                   if(statusEl)statusEl.textContent='✓ '+pages+' page(s) extraite(s) — '+file.name;
                   toast('✓ Contenu PDF extrait !');
@@ -1265,8 +1346,8 @@ function extractFileContent(input, stepIdx){
     var reader=new FileReader();
     reader.onload=function(e){
       mammoth.extractRawText({arrayBuffer:e.target.result}).then(function(result){
-        S.editCourse.steps[stepIdx].content=result.value;
-        var ta=document.getElementById('lessonContent'+stepIdx);
+        S.editCourse.modules[modIdx].steps[stepIdx].content=result.value;
+        var ta=document.getElementById('lessonContent'+modIdx+'_'+stepIdx);
         if(ta)ta.value=result.value;
         if(statusEl)statusEl.textContent='✓ Fichier importé — '+file.name;
         toast('✓ Contenu Word extrait !');
@@ -1284,7 +1365,7 @@ function extractFileContent(input, stepIdx){
 
 /* ═══════ TEACHER ═══════ */
 function renderTeacher(){
-  if(S.user?.role!=='enseignant'&&S.user?.role!=='moderateur'){go('home');return;}
+  if(S.user?.role!=='moderateur'){go('home');return;}
   const el=document.getElementById('teacherBox');
   if(S.editCourse!==null){renderTeacherForm(el);return;}
   const isMod=S.user.role==='moderateur';
@@ -1294,12 +1375,26 @@ function renderTeacher(){
   let h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px"><div><div class="sec-label">'+panelLabel+'</div><h2 class="sec-title" style="font-size:26px;margin-bottom:0">'+panelTitle+'</h2></div><button class="btn-sm primary" onclick="startCreate()">＋ Nouvelle formation</button></div>';
   if(!my.length)h+='<div class="empty"><div class="empty-icon">'+SVG.clipboard+'</div><p>'+(isMod?'Aucune formation sur la plateforme.':'Vous n\'avez pas encore de formation.')+'</p><button class="btn btn-p" style="font-size:13px;padding:10px 22px" onclick="startCreate()">＋ Créer la première</button></div>';
   else{h+='<div class="admin-tbl-wrap"><table class="admin-tbl"><thead><tr><th></th><th>Formation</th>'+(isMod?'<th>Auteur</th>':'')+'<th>Étapes</th><th>Actions</th></tr></thead><tbody>';
-    my.forEach((c,i)=>{h+='<tr style="animation:slideR .3s '+i*.05+'s both"><td style="font-size:22px;text-align:center;width:50px">'+(SVG[c.icon]||SVG.book)+'</td><td><div style="font-weight:600">'+esc(c.title)+'</div><div style="font-size:11px;color:var(--text-m)">'+esc(c.subtitle||'')+'</div></td>'+(isMod?'<td style="font-size:12px;color:var(--text-2)">'+esc(c.author||'—')+'</td>':'')+'<td style="color:var(--text-2)">'+(c.steps?.filter(s=>s.title).length||0)+'</td><td><div style="display:flex;gap:6px"><button class="btn-sm" onclick="startEdit(\''+c.id+'\')">'+SVG.edit+' Modifier</button><button class="btn-sm danger" onclick="if(confirm(\'Supprimer ?\')){delC(\''+c.id+'\');toast(\'✓ Supprimée\');renderTeacher();}">'+SVG.trash+'</button></div></td></tr>';});
+    my.forEach((c,i)=>{h+='<tr style="animation:slideR .3s '+i*.05+'s both"><td style="font-size:22px;text-align:center;width:50px">'+(SVG[c.icon]||SVG.book)+'</td><td><div style="font-weight:600">'+esc(c.title)+'</div><div style="font-size:11px;color:var(--text-m)">'+esc(c.subtitle||'')+'</div></td>'+(isMod?'<td style="font-size:12px;color:var(--text-2)">'+esc(c.creator_name||c.author||'—')+'</td>':'')+'<td style="color:var(--text-2)">'+(c.step_count||flatSteps(c).length||0)+'</td><td><div style="display:flex;gap:6px"><button class="btn-sm" onclick="startEdit(\''+c.id+'\')">'+SVG.edit+' Modifier</button><button class="btn-sm danger" onclick="if(confirm(\'Supprimer ?\')){delC(\''+c.id+'\');renderTeacher();}">'+SVG.trash+'</button></div></td></tr>';});
     h+='</tbody></table></div>';}
   el.innerHTML=h;
 }
-function startCreate(){S.editCourse={steps:[]};renderTeacher();}
-function startEdit(id){const c=S.courses.find(x=>x.id===id);if(!c)return;S.editCourse=JSON.parse(JSON.stringify(c));if(!S.editCourse.steps?.length)S.editCourse.steps=[{type:'lesson',title:'',content:''}];renderTeacher();}
+function startCreate(){S.editCourse={modules:[{title:'Module 1',steps:[]}]};renderTeacher();}
+async function startEdit(id){
+  // Fetch full course with modules/steps from API
+  try{
+    const res=await fetch('/api/admin/courses/'+id,{headers:getAuthHeaders()});
+    if(!res.ok){toast('Impossible de charger la formation.');return;}
+    const data=await res.json();
+    const c=data.course;
+    S.editCourse=JSON.parse(JSON.stringify(c));
+    // Normalize step_type → type for the form
+    if(S.editCourse.modules){S.editCourse.modules.forEach(m=>{(m.steps||[]).forEach(s=>{if(s.step_type&&!s.type){s.type=s.step_type;}});});}
+    if(!S.editCourse.modules?.length){S.editCourse.modules=[{title:'Module 1',steps:[{type:'lesson',title:'',content:''}]}];}
+    if(!S.editCourse.modules.some(m=>m.steps?.length))S.editCourse.modules[0].steps=[{type:'lesson',title:'',content:''}];
+    renderTeacher();
+  }catch{toast('Impossible de contacter le serveur.');}
+}
 function cancelEdit(){S.editCourse=null;renderTeacher();}
 
 function renderTeacherForm(el){
@@ -1317,36 +1412,55 @@ function renderTeacherForm(el){
   h+='<div class="field"><label>Durée</label><input class="inp" id="fDur" value="'+esc(c.duration||'')+'" placeholder="ex: 32h"></div>';
   h+='<div class="field"><label>Tags (virgules)</label><input class="inp" id="fTags" value="'+esc((c.tags||[]).join(', '))+'" placeholder="Python, ML"></div>';
   h+='</div>';
-  h+='<div class="form-section"><h4>'+SVG.pin+' Contenu du parcours (timeline)</h4><p style="font-size:12px;color:var(--text-m);margin-bottom:16px">Ajoutez des étapes : vidéos, leçons texte, exercices de code.</p><div class="timeline" id="stepsTimeline"></div><div class="tl-add"><button class="btn-sm" onclick="addStep(\'video\')">'+SVG.video+' Vidéo</button><button class="btn-sm" onclick="addStep(\'lesson\')">'+SVG.lesson+' Leçon</button><button class="btn-sm" onclick="addStep(\'code\')">'+SVG.code+' Code</button></div></div>';
+  h+='<div class="form-section"><h4>'+SVG.pin+' Contenu du parcours</h4><p style="font-size:12px;color:var(--text-m);margin-bottom:16px">Organisez votre cours en modules. Chaque module contient des étapes (vidéos, leçons, code).</p><div id="modulesContainer"></div><div class="tl-add" style="margin-top:12px"><button class="btn-sm primary" onclick="addModule()">＋ Nouveau module</button></div></div>';
   h+='<div style="display:flex;gap:10px;margin-top:26px;justify-content:flex-end"><button class="btn-sm" onclick="cancelEdit()">Annuler</button><button class="btn-sm primary" onclick="saveTeacherCourse()">'+SVG.save+' Enregistrer</button></div></div>';
-  el.innerHTML=h;renderSteps();
+  el.innerHTML=h;renderModules();
 }
-function renderSteps(){
-  const tl=document.getElementById('stepsTimeline');if(!tl)return;
-  tl.innerHTML=S.editCourse.steps.map((s,i)=>{
-    const tc=s.type==='video'?'video':s.type==='lesson'?'lesson':'code';
-    const tIcon=s.type==='video'?SVG.play:s.type==='lesson'?SVG.doc:SVG.code;
-    let r='<div class="tl-step" style="animation-delay:'+i*.04+'s"><div class="tl-dot '+tc+'">'+tIcon+'</div><div class="tl-card"><div class="tl-card-head"><span class="tl-type '+tc+'">'+(s.type==='video'?'Vidéo':s.type==='lesson'?'Leçon':'Code')+' · Étape '+(i+1)+'</span><div style="display:flex;gap:4px">'+(i>0?'<button class="btn-sm" onclick="moveStep('+i+',-1)" style="padding:3px 7px">↑</button>':'')+(i<S.editCourse.steps.length-1?'<button class="btn-sm" onclick="moveStep('+i+',1)" style="padding:3px 7px">↓</button>':'')+'<button class="btn-sm danger" onclick="rmStep('+i+')">✕</button></div></div>';
-    r+='<div class="field" style="margin-top:6px"><label>Titre</label><input class="inp" value="'+esc(s.title||'')+'" onchange="S.editCourse.steps['+i+'].title=this.value" placeholder="Titre de l\'étape"></div>';
-    if(s.type==='video'){
-      r+='<div class="field"><label>URL YouTube</label><input class="inp" value="'+esc(s.url||'')+'" onchange="S.editCourse.steps['+i+'].url=this.value" placeholder="https://youtube.com/watch?v=..."></div>';
-      r+='<div class="field"><label>Résumé de la vidéo</label><textarea class="textarea" onchange="S.editCourse.steps['+i+'].summary=this.value" placeholder="Résumé du contenu vidéo...">'+esc(s.summary||'')+'</textarea></div>';
-      r+='<div class="field"><label>Transcription</label><textarea class="textarea" style="min-height:100px" onchange="S.editCourse.steps['+i+'].transcription=this.value" placeholder="00:00 — Texte...\n00:55 — Texte...">'+esc(s.transcription||'')+'</textarea></div>';
-      r+='<div class="field"><label>Fichiers ressources (un par ligne : nom | taille)</label><textarea class="textarea" onchange="S.editCourse.steps['+i+'].resources=this.value" placeholder="dataset_iris.csv | 30 Ko\nslides_ml_intro.pdf | 1.5 Mo">'+esc(s.resources||'')+'</textarea></div>';
-    }
-    if(s.type==='lesson'){r+='<div class="field"><label>Importer un fichier (PDF ou Word)</label><div style="display:flex;align-items:center;gap:10px"><input type="file" accept=".pdf,.docx,.doc" class="inp" onchange="extractFileContent(this,'+i+')" style="padding:8px;flex:1"><span id="fileStatus'+i+'" style="font-size:12px;color:var(--text-m)"></span></div></div>';r+='<div class="field"><label>Contenu</label><textarea class="textarea" style="min-height:160px" id="lessonContent'+i+'" onchange="S.editCourse.steps['+i+'].content=this.value" placeholder="Rédigez votre leçon ou importez un fichier PDF/Word...">'+esc(s.content||'')+'</textarea></div>';}
-    if(s.type==='code'){r+='<div class="field"><label>Consigne</label><input class="inp" value="'+esc(s.description||'')+'" onchange="S.editCourse.steps['+i+'].description=this.value" placeholder="Ce que l\'étudiant doit faire"></div>';
-      r+='<div class="field"><label>Code de départ</label><textarea class="textarea" style="font-family:var(--mono);font-size:12px;min-height:120px" onchange="S.editCourse.steps['+i+'].code=this.value" placeholder="# Code Python...">'+esc(s.code||'')+'</textarea></div>';}
-    r+='</div></div>';return r;
+function renderModules(){
+  const mc=document.getElementById('modulesContainer');if(!mc)return;
+  mc.innerHTML=S.editCourse.modules.map((mod,mi)=>{
+    let h='<div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;background:rgba(255,255,255,.02)">';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
+    h+='<span style="font-size:11px;font-weight:700;color:var(--accent-b);letter-spacing:.5px">MODULE '+(mi+1)+'</span>';
+    h+='<input class="inp" value="'+esc(mod.title||'')+'" onchange="S.editCourse.modules['+mi+'].title=this.value" placeholder="Titre du module" style="flex:1">';
+    h+='<div style="display:flex;gap:4px">';
+    if(mi>0)h+='<button class="btn-sm" onclick="moveModule('+mi+',-1)" style="padding:3px 7px">↑</button>';
+    if(mi<S.editCourse.modules.length-1)h+='<button class="btn-sm" onclick="moveModule('+mi+',1)" style="padding:3px 7px">↓</button>';
+    if(S.editCourse.modules.length>1)h+='<button class="btn-sm danger" onclick="rmModule('+mi+')">✕</button>';
+    h+='</div></div>';
+    h+='<div class="timeline">';
+    h+=(mod.steps||[]).map((s,si)=>{
+      const tc=s.type==='video'?'video':s.type==='lesson'?'lesson':'code';
+      const tIcon=s.type==='video'?SVG.play:s.type==='lesson'?SVG.doc:SVG.code;
+      let r='<div class="tl-step" style="animation-delay:'+si*.04+'s"><div class="tl-dot '+tc+'">'+tIcon+'</div><div class="tl-card"><div class="tl-card-head"><span class="tl-type '+tc+'">'+(s.type==='video'?'Vidéo':s.type==='lesson'?'Leçon':'Code')+' · Étape '+(si+1)+'</span><div style="display:flex;gap:4px">'+(si>0?'<button class="btn-sm" onclick="moveStep('+mi+','+si+',-1)" style="padding:3px 7px">↑</button>':'')+(si<(mod.steps||[]).length-1?'<button class="btn-sm" onclick="moveStep('+mi+','+si+',1)" style="padding:3px 7px">↓</button>':'')+'<button class="btn-sm danger" onclick="rmStep('+mi+','+si+')">✕</button></div></div>';
+      r+='<div class="field" style="margin-top:6px"><label>Titre</label><input class="inp" value="'+esc(s.title||'')+'" onchange="S.editCourse.modules['+mi+'].steps['+si+'].title=this.value" placeholder="Titre de l\'étape"></div>';
+      if(s.type==='video'){
+        r+='<div class="field"><label>URL YouTube</label><input class="inp" value="'+esc(s.url||'')+'" onchange="S.editCourse.modules['+mi+'].steps['+si+'].url=this.value" placeholder="https://youtube.com/watch?v=..."></div>';
+        r+='<div class="field"><label>Résumé de la vidéo</label><textarea class="textarea" onchange="S.editCourse.modules['+mi+'].steps['+si+'].summary=this.value" placeholder="Résumé du contenu vidéo...">'+esc(s.summary||'')+'</textarea></div>';
+        r+='<div class="field"><label>Transcription</label><textarea class="textarea" style="min-height:100px" onchange="S.editCourse.modules['+mi+'].steps['+si+'].transcription=this.value" placeholder="00:00 — Texte...\n00:55 — Texte...">'+esc(s.transcription||'')+'</textarea></div>';
+        r+='<div class="field"><label>Fichiers ressources (un par ligne : nom | taille)</label><textarea class="textarea" onchange="S.editCourse.modules['+mi+'].steps['+si+'].resources=this.value" placeholder="dataset_iris.csv | 30 Ko\nslides_ml_intro.pdf | 1.5 Mo">'+esc(s.resources||'')+'</textarea></div>';
+      }
+      if(s.type==='lesson'){r+='<div class="field"><label>Importer un fichier (PDF ou Word)</label><div style="display:flex;align-items:center;gap:10px"><input type="file" accept=".pdf,.docx,.doc" class="inp" onchange="extractFileContent(this,'+mi+','+si+')" style="padding:8px;flex:1"><span id="fileStatus'+mi+'_'+si+'" style="font-size:12px;color:var(--text-m)"></span></div></div>';r+='<div class="field"><label>Contenu</label><textarea class="textarea" style="min-height:160px" id="lessonContent'+mi+'_'+si+'" onchange="S.editCourse.modules['+mi+'].steps['+si+'].content=this.value" placeholder="Rédigez votre leçon ou importez un fichier PDF/Word...">'+esc(s.content||'')+'</textarea></div>';}
+      if(s.type==='code'){r+='<div class="field"><label>Consigne</label><input class="inp" value="'+esc(s.description||'')+'" onchange="S.editCourse.modules['+mi+'].steps['+si+'].description=this.value" placeholder="Ce que l\'étudiant doit faire"></div>';
+        r+='<div class="field"><label>Code de départ</label><textarea class="textarea" style="font-family:var(--mono);font-size:12px;min-height:120px" onchange="S.editCourse.modules['+mi+'].steps['+si+'].code=this.value" placeholder="# Code Python...">'+esc(s.code||'')+'</textarea></div>';
+        r+='<div class="field"><label>Solution (auto-correction)</label><textarea class="textarea" style="font-family:var(--mono);font-size:12px;min-height:80px" onchange="S.editCourse.modules['+mi+'].steps['+si+'].solution_code=this.value" placeholder="# Solution attendue...">'+esc(s.solution_code||'')+'</textarea></div>';}
+      r+='</div></div>';return r;
+    }).join('');
+    h+='</div>';
+    h+='<div class="tl-add"><button class="btn-sm" onclick="addStep('+mi+',\'video\')">'+SVG.video+' Vidéo</button><button class="btn-sm" onclick="addStep('+mi+',\'lesson\')">'+SVG.lesson+' Leçon</button><button class="btn-sm" onclick="addStep('+mi+',\'code\')">'+SVG.code+' Code</button></div>';
+    h+='</div>';return h;
   }).join('');
 }
-function addStep(type){S.editCourse.steps.push({type,title:'',url:'',content:'',description:'',code:'',summary:'',transcription:'',resources:''});renderSteps();}
-function rmStep(i){S.editCourse.steps.splice(i,1);renderSteps();}
-function moveStep(i,dir){const s=S.editCourse.steps;const j=i+dir;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];renderSteps();}
-function saveTeacherCourse(){
+function addModule(){S.editCourse.modules.push({title:'Module '+(S.editCourse.modules.length+1),steps:[]});renderModules();}
+function rmModule(mi){S.editCourse.modules.splice(mi,1);renderModules();}
+function moveModule(mi,dir){const m=S.editCourse.modules;const j=mi+dir;if(j<0||j>=m.length)return;[m[mi],m[j]]=[m[j],m[mi]];renderModules();}
+function addStep(mi,type){S.editCourse.modules[mi].steps.push({type,title:'',url:'',content:'',description:'',code:'',solution_code:'',summary:'',transcription:'',resources:''});renderModules();}
+function rmStep(mi,si){S.editCourse.modules[mi].steps.splice(si,1);renderModules();}
+function moveStep(mi,si,dir){const s=S.editCourse.modules[mi].steps;const j=si+dir;if(j<0||j>=s.length)return;[s[si],s[j]]=[s[j],s[si]];renderModules();}
+async function saveTeacherCourse(){
   const title=document.getElementById('fTitle').value.trim();if(!title){toast('Titre requis');return;}
-  const data={title,subtitle:document.getElementById('fSub').value.trim(),description:document.getElementById('fDesc').value.trim(),icon:S.editCourse.icon||'book',level:document.getElementById('fLvl').value,duration:document.getElementById('fDur').value.trim(),tags:document.getElementById('fTags').value.split(',').map(t=>t.trim()).filter(Boolean),steps:S.editCourse.steps};
-  if(S.editCourse.id)updC(S.editCourse.id,data);else addC(data);
+  const data={title,subtitle:document.getElementById('fSub').value.trim(),description:document.getElementById('fDesc').value.trim(),icon:S.editCourse.icon||'book',level:document.getElementById('fLvl').value,duration:document.getElementById('fDur').value.trim(),tags:document.getElementById('fTags').value.split(',').map(t=>t.trim()).filter(Boolean),modules:S.editCourse.modules};
+  if(S.editCourse.id){await updC(S.editCourse.id,data);}else{await addC(data);}
   S.editCourse=null;toast('✓ Formation enregistrée !');renderTeacher();
 }
 
