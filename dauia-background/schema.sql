@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════
--- DAU'IA — Schéma de base de données MySQL (v2 simplifié)
+-- DAU'IA — Schéma de base de données MySQL (v3)
 -- ═══════════════════════════════════════════════════════════════
 --
 -- Exécuter :
@@ -36,18 +36,18 @@ CREATE TABLE IF NOT EXISTS users (
     name                VARCHAR(100)    NOT NULL,
     email               VARCHAR(255)    NOT NULL UNIQUE,
     password_hash       VARCHAR(255)    NOT NULL,
-    role                ENUM('etudiant', 'moderateur') 
+    role                ENUM('etudiant', 'moderateur')
                         NOT NULL DEFAULT 'etudiant',
-    
+
     -- Vérification email
     email_verified      BOOLEAN         NOT NULL DEFAULT FALSE,
     verify_token        VARCHAR(64)     NULL,
     verify_token_expires TIMESTAMP      NULL,
-    
+
     -- Sécurité anti brute-force
     failed_login_count  TINYINT UNSIGNED NOT NULL DEFAULT 0,
     locked_until        TIMESTAMP       NULL,
-    
+
     -- Métadonnées
     avatar_url          VARCHAR(500)    NULL,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS courses (
     subtitle    VARCHAR(300)    NULL,
     description TEXT            NULL,
     icon        VARCHAR(10)     NOT NULL DEFAULT '📘',
-    level       ENUM('Débutant', 'Intermédiaire', 'Avancé', 
+    level       ENUM('Débutant', 'Intermédiaire', 'Avancé',
                      'Débutant → Intermédiaire', 'Intermédiaire → Avancé')
                 NOT NULL DEFAULT 'Débutant',
     duration    VARCHAR(20)     NULL,
@@ -147,25 +147,56 @@ CREATE TABLE IF NOT EXISTS course_tags (
 ) ENGINE=InnoDB;
 
 
--- ─── COURSE STEPS (TIMELINE) ────────────────────────────────
--- Chaque formation = une série d'étapes ordonnées
--- Types : video | lesson | code
+-- ─── COURSE MODULES (Chapitres) ─────────────────────────────
+-- Un module regroupe plusieurs étapes au sein d'un cours.
+-- Pont entre courses et course_steps.
 
-CREATE TABLE IF NOT EXISTS course_steps (
+CREATE TABLE IF NOT EXISTS course_modules (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     course_id   INT UNSIGNED    NOT NULL,
     sort_order  INT UNSIGNED    NOT NULL DEFAULT 0,
-    step_type   ENUM('video', 'lesson', 'code') NOT NULL DEFAULT 'lesson',
     title       VARCHAR(200)    NOT NULL,
-    url         VARCHAR(500)    NULL,           -- video → URL YouTube
-    content     TEXT            NULL,           -- lesson → contenu texte/markdown
-    description TEXT            NULL,           -- code → consigne
-    code        TEXT            NULL,           -- code → code de départ
     created_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
     INDEX idx_course_order (course_id, sort_order)
+) ENGINE=InnoDB;
+
+
+-- ─── COURSE STEPS (Étapes) ──────────────────────────────────
+-- Chaque module = une série d'étapes ordonnées
+-- Types : video | lesson | code
+--
+-- Colonnes par type :
+--   video  → url, transcription, resources
+--   lesson → content
+--   code   → description (consigne), code (départ), solution_code (correction)
+
+CREATE TABLE IF NOT EXISTS course_steps (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    module_id       INT UNSIGNED    NOT NULL,
+    sort_order      INT UNSIGNED    NOT NULL DEFAULT 0,
+    step_type       ENUM('video', 'lesson', 'code') NOT NULL DEFAULT 'lesson',
+    title           VARCHAR(200)    NOT NULL,
+
+    -- video
+    url             VARCHAR(500)    NULL,
+    transcription   TEXT            NULL,
+    resources       TEXT            NULL,
+
+    -- lesson
+    content         TEXT            NULL,
+
+    -- code
+    description     TEXT            NULL,
+    code            TEXT            NULL,
+    solution_code   TEXT            NULL,
+
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (module_id) REFERENCES course_modules(id) ON DELETE CASCADE,
+    INDEX idx_module_order (module_id, sort_order)
 ) ENGINE=InnoDB;
 
 
@@ -175,7 +206,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id         INT UNSIGNED    NOT NULL,
     course_id       INT UNSIGNED    NOT NULL,
-    status          ENUM('enrolled', 'in_progress', 'completed') 
+    status          ENUM('enrolled', 'in_progress', 'completed')
                     NOT NULL DEFAULT 'enrolled',
     enrolled_at     TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at    TIMESTAMP       NULL,
@@ -208,7 +239,7 @@ CREATE TABLE IF NOT EXISTS step_progress (
 -- ═══════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE VIEW v_courses_overview AS
-SELECT 
+SELECT
     c.*,
     u.name AS creator_name,
     COUNT(DISTINCT cs.id) AS step_count,
@@ -216,13 +247,14 @@ SELECT
     GROUP_CONCAT(DISTINCT ct.tag ORDER BY ct.tag SEPARATOR ', ') AS tags_list
 FROM courses c
 LEFT JOIN users u ON c.created_by = u.id
-LEFT JOIN course_steps cs ON cs.course_id = c.id
+LEFT JOIN course_modules cm ON cm.course_id = c.id
+LEFT JOIN course_steps cs ON cs.module_id = cm.id
 LEFT JOIN enrollments e ON e.course_id = c.id
 LEFT JOIN course_tags ct ON ct.course_id = c.id
 GROUP BY c.id;
 
 CREATE OR REPLACE VIEW v_student_progress AS
-SELECT 
+SELECT
     e.user_id,
     e.course_id,
     c.title AS course_title,
@@ -237,7 +269,8 @@ SELECT
     e.enrolled_at
 FROM enrollments e
 JOIN courses c ON e.course_id = c.id
-LEFT JOIN course_steps cs ON cs.course_id = c.id
+LEFT JOIN course_modules cm ON cm.course_id = c.id
+LEFT JOIN course_steps cs ON cs.module_id = cm.id
 LEFT JOIN step_progress sp ON sp.step_id = cs.id AND sp.user_id = e.user_id
 GROUP BY e.user_id, e.course_id;
 
@@ -249,36 +282,41 @@ GROUP BY e.user_id, e.course_id;
 -- ⚠️ Changez en production
 
 INSERT INTO users (name, email, password_hash, role, email_verified) VALUES
-('Modérateur DAU''IA', 'admin@dauphine.psl.eu', 
- '$2y$12$LJ3m4yS2J0k8G5g8t6U5/.QGv9xk7B2hE3zCdPyqp0wK1M3j8x5Hy', 
+('Modérateur DAU''IA', 'admin@dauphine.psl.eu',
+ '$2y$12$LJ3m4yS2J0k8G5g8t6U5/.QGv9xk7B2hE3zCdPyqp0wK1M3j8x5Hy',
  'moderateur', TRUE);
 
 INSERT INTO users (name, email, password_hash, role, email_verified) VALUES
-('Étudiant Test', 'etudiant.test@dauphine.psl.eu', 
- '$2y$12$LJ3m4yS2J0k8G5g8t6U5/.QGv9xk7B2hE3zCdPyqp0wK1M3j8x5Hy', 
+('Étudiant Test', 'etudiant.test@dauphine.psl.eu',
+ '$2y$12$LJ3m4yS2J0k8G5g8t6U5/.QGv9xk7B2hE3zCdPyqp0wK1M3j8x5Hy',
  'etudiant', TRUE);
 
 -- Formation exemple
 INSERT INTO courses (title, subtitle, description, icon, level, duration, is_published, created_by) VALUES
-('Python pour la Data Science', 
- 'De zéro à Pandas', 
+('Python pour la Data Science',
+ 'De zéro à Pandas',
  'Apprenez Python et ses bibliothèques de data science. Manipulez, analysez et visualisez des données.',
  '🐍', 'Débutant', '12h', TRUE, 1);
 
 INSERT INTO course_tags (course_id, tag) VALUES
 (1, 'Python'), (1, 'Pandas'), (1, 'NumPy'), (1, 'Matplotlib');
 
-INSERT INTO course_steps (course_id, sort_order, step_type, title, url) VALUES
+-- Module exemple
+INSERT INTO course_modules (course_id, sort_order, title) VALUES
+(1, 0, 'Les bases de Python');
+
+-- Étapes rattachées au module (module_id = 1)
+INSERT INTO course_steps (module_id, sort_order, step_type, title, url) VALUES
 (1, 0, 'video', 'Introduction à Python', 'https://www.youtube.com/watch?v=kqtD5dpn9C8');
 
-INSERT INTO course_steps (course_id, sort_order, step_type, title, content) VALUES
-(1, 1, 'lesson', 'Variables et types de données', 
+INSERT INTO course_steps (module_id, sort_order, step_type, title, content) VALUES
+(1, 1, 'lesson', 'Variables et types de données',
 'En Python, une variable est un nom qui pointe vers une valeur en mémoire.\n\nLes types fondamentaux :\n- int : nombres entiers\n- float : nombres décimaux\n- str : chaînes de caractères\n- bool : booléens\n- list : listes\n- dict : dictionnaires');
 
-INSERT INTO course_steps (course_id, sort_order, step_type, title, description, code) VALUES
+INSERT INTO course_steps (module_id, sort_order, step_type, title, description, code) VALUES
 (1, 2, 'code', 'Premier script Python',
 'Créez deux variables et affichez-les avec print().',
-'# Créez vos variables ici\nnom = \"votre_nom\"\nage = 20\n\nprint(f\"Je m''appelle {nom} et j''ai {age} ans.\")');
+'# Créez vos variables ici\nnom = "votre_nom"\nage = 20\n\nprint(f"Je m''appelle {nom} et j''ai {age} ans.")');
 
 
 -- ═══════════════════════════════════════════════════════════════
