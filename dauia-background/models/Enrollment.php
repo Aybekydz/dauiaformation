@@ -1,13 +1,15 @@
 <?php
 /**
  * models/Enrollment.php — Inscriptions et progression étudiants
- * 
+ *
  * Gère :
  *   - Inscription à une formation
  *   - Marquage d'étapes comme complétées
  *   - Calcul de la progression
  *   - Désinscription
- * 
+ *
+ * SCHÉMA : courses → course_modules → course_steps
+ *
  * PERMISSIONS :
  *   Tout utilisateur vérifié peut s'inscrire et progresser.
  *   Les modérateurs voient les stats de tous les étudiants.
@@ -64,11 +66,12 @@ class Enrollment {
     public function unenroll(int $userId, int $courseId): void {
         $this->db->beginTransaction();
         try {
-            // Supprimer la progression des étapes
+            // Supprimer la progression des étapes (via course_modules)
             $this->db->prepare(
                 "DELETE sp FROM step_progress sp
                  JOIN course_steps cs ON sp.step_id = cs.id
-                 WHERE sp.user_id = ? AND cs.course_id = ?"
+                 JOIN course_modules cm ON cs.module_id = cm.id
+                 WHERE sp.user_id = ? AND cm.course_id = ?"
             )->execute([$userId, $courseId]);
 
             // Supprimer l'inscription
@@ -96,11 +99,12 @@ class Enrollment {
      * Marquer une étape comme complétée
      */
     public function completeStep(int $userId, int $stepId): array {
-        // Vérifier que l'étape existe et récupérer le course_id
+        // Vérifier que l'étape existe et récupérer le course_id (via course_modules)
         $stmt = $this->db->prepare(
-            "SELECT cs.id, cs.course_id 
+            "SELECT cs.id, cm.course_id
              FROM course_steps cs
-             JOIN courses c ON cs.course_id = c.id
+             JOIN course_modules cm ON cs.module_id = cm.id
+             JOIN courses c ON cm.course_id = c.id
              WHERE cs.id = ? AND c.is_published = TRUE"
         );
         $stmt->execute([$stepId]);
@@ -134,7 +138,13 @@ class Enrollment {
      * Démarquer une étape (annuler la complétion)
      */
     public function uncompleteStep(int $userId, int $stepId): array {
-        $stmt = $this->db->prepare("SELECT course_id FROM course_steps WHERE id = ?");
+        // Récupérer le course_id via course_modules
+        $stmt = $this->db->prepare(
+            "SELECT cm.course_id
+             FROM course_steps cs
+             JOIN course_modules cm ON cs.module_id = cm.id
+             WHERE cs.id = ?"
+        );
         $stmt->execute([$stepId]);
         $step = $stmt->fetch();
 
@@ -155,14 +165,15 @@ class Enrollment {
      * Mettre à jour automatiquement le statut d'inscription
      */
     private function updateEnrollmentStatus(int $userId, int $courseId): void {
-        // Compter les étapes totales et complétées
+        // Compter les étapes totales et complétées (via course_modules)
         $stmt = $this->db->prepare(
-            "SELECT 
+            "SELECT
                 COUNT(DISTINCT cs.id) AS total,
                 COUNT(DISTINCT sp.id) AS completed
-             FROM course_steps cs
+             FROM course_modules cm
+             JOIN course_steps cs ON cs.module_id = cm.id
              LEFT JOIN step_progress sp ON sp.step_id = cs.id AND sp.user_id = ?
-             WHERE cs.course_id = ?"
+             WHERE cm.course_id = ?"
         );
         $stmt->execute([$userId, $courseId]);
         $counts = $stmt->fetch();
@@ -217,7 +228,7 @@ class Enrollment {
      */
     public function getUserEnrollments(int $userId): array {
         $stmt = $this->db->prepare(
-            "SELECT e.*, c.title AS course_title, c.icon AS course_icon, 
+            "SELECT e.*, c.title AS course_title, c.icon AS course_icon,
                     c.level, c.subtitle
              FROM enrollments e
              JOIN courses c ON e.course_id = c.id
@@ -239,17 +250,20 @@ class Enrollment {
      */
     public function getProgress(int $userId, int $courseId): array {
         $stmt = $this->db->prepare(
-            "SELECT 
+            "SELECT
                 cs.id AS step_id,
                 cs.title AS step_title,
                 cs.step_type,
                 cs.sort_order,
+                cm.title AS module_title,
+                cm.sort_order AS module_order,
                 CASE WHEN sp.id IS NOT NULL THEN TRUE ELSE FALSE END AS completed,
                 sp.completed_at
-             FROM course_steps cs
+             FROM course_modules cm
+             JOIN course_steps cs ON cs.module_id = cm.id
              LEFT JOIN step_progress sp ON sp.step_id = cs.id AND sp.user_id = ?
-             WHERE cs.course_id = ?
-             ORDER BY cs.sort_order ASC"
+             WHERE cm.course_id = ?
+             ORDER BY cm.sort_order ASC, cs.sort_order ASC"
         );
         $stmt->execute([$userId, $courseId]);
         $steps = $stmt->fetchAll();
@@ -275,9 +289,9 @@ class Enrollment {
     public function getCourseStats(int $courseId): array {
         // Inscriptions par statut
         $stmt = $this->db->prepare(
-            "SELECT status, COUNT(*) AS count 
-             FROM enrollments 
-             WHERE course_id = ? 
+            "SELECT status, COUNT(*) AS count
+             FROM enrollments
+             WHERE course_id = ?
              GROUP BY status"
         );
         $stmt->execute([$courseId]);
@@ -286,16 +300,17 @@ class Enrollment {
             $statusCounts[$row['status']] = (int)$row['count'];
         }
 
-        // Progression moyenne
+        // Progression moyenne (via course_modules)
         $stmt = $this->db->prepare(
             "SELECT AVG(sub.pct) AS avg_progress FROM (
-                SELECT 
+                SELECT
                     e.user_id,
                     CASE WHEN COUNT(DISTINCT cs.id) = 0 THEN 0
                          ELSE COUNT(DISTINCT sp.id) / COUNT(DISTINCT cs.id) * 100
                     END AS pct
                 FROM enrollments e
-                LEFT JOIN course_steps cs ON cs.course_id = e.course_id
+                LEFT JOIN course_modules cm ON cm.course_id = e.course_id
+                LEFT JOIN course_steps cs ON cs.module_id = cm.id
                 LEFT JOIN step_progress sp ON sp.step_id = cs.id AND sp.user_id = e.user_id
                 WHERE e.course_id = ?
                 GROUP BY e.user_id
