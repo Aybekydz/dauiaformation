@@ -160,6 +160,76 @@ export default function DauiaApp() {
   const [sandboxCode, setSandboxCode] = useState("# dauia.com — Python AI Sandbox\n# Bibliothèques : numpy, pandas, matplotlib,\n# scikit-learn, scipy, seaborn, statsmodels\n\nimport numpy as np\nimport pandas as pd\nfrom sklearn.linear_model import LinearRegression\n\nX = np.array([[1],[2],[3],[4],[5]])\ny = np.array([2.1, 4.0, 5.8, 8.1, 9.9])\n\nmodel = LinearRegression()\nmodel.fit(X, y)\n\nprint(f\"Coefficient : {model.coef_[0]:.2f}\")\nprint(f\"Intercept   : {model.intercept_:.2f}\")\nprint(f\"R² score    : {model.score(X, y):.4f}\")\nprint(f\"Prédiction x=10 : {model.predict([[10]])[0]:.2f}\")\n");
   const [consoleOut, setConsoleOut] = useState("");
   const [isRunning, setIsRunning] = useState(false);
+
+  // ═══ HYPRLAND TILING STATE ═══
+  const [sbLayout, setSbLayout] = useState("row"); // 'row' | 'col'
+  const [sbPanels, setSbPanels] = useState(["editor", "console", "terminal"]);
+  const [sbFocused, setSbFocused] = useState("editor");
+  const sbDragRef = useRef({ dragging: null, startX: 0, startY: 0, ghost: null });
+
+  const sbMovePanel = (idx, offset) => {
+    const target = idx + offset;
+    if (target < 0 || target >= sbPanels.length) return;
+    setSbPanels(prev => { const n = [...prev]; [n[idx], n[target]] = [n[target], n[idx]]; return n; });
+  };
+
+  const sbDragStart = useCallback((panelId, e) => {
+    e.preventDefault();
+    const tile = e.target.closest(".hypr-tile");
+    if (!tile) return;
+    const rect = tile.getBoundingClientRect();
+    const ghost = tile.cloneNode(true);
+    ghost.className = "hypr-tile hypr-ghost";
+    ghost.style.cssText = `position:fixed;width:${rect.width}px;height:${rect.height}px;left:${rect.left}px;top:${rect.top}px;z-index:999;pointer-events:none;opacity:.85;`;
+    document.body.appendChild(ghost);
+    tile.style.opacity = "0.25";
+    sbDragRef.current = { dragging: panelId, startX: e.clientX, startY: e.clientY, ghost, srcTile: tile };
+    setSbFocused(panelId);
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const d = sbDragRef.current;
+      if (!d.dragging || !d.ghost) return;
+      const dx = e.clientX - d.startX;
+      const dy = e.clientY - d.startY;
+      d.ghost.style.transform = `translate(${dx}px,${dy}px)`;
+      // Detect which panel we're over
+      document.querySelectorAll(".hypr-tile:not(.hypr-ghost)").forEach(el => {
+        const r = el.getBoundingClientRect();
+        const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+        el.classList.toggle("hypr-drop-target", inside && el.dataset.panel !== d.dragging);
+      });
+    };
+    const onUp = (e) => {
+      const d = sbDragRef.current;
+      if (!d.dragging) return;
+      // Find drop target
+      let targetPanel = null;
+      document.querySelectorAll(".hypr-tile:not(.hypr-ghost)").forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom && el.dataset.panel !== d.dragging) {
+          targetPanel = el.dataset.panel;
+        }
+        el.classList.remove("hypr-drop-target");
+      });
+      if (targetPanel) {
+        setSbPanels(prev => {
+          const n = [...prev];
+          const fromIdx = n.indexOf(d.dragging);
+          const toIdx = n.indexOf(targetPanel);
+          if (fromIdx >= 0 && toIdx >= 0) { [n[fromIdx], n[toIdx]] = [n[toIdx], n[fromIdx]]; }
+          return n;
+        });
+      }
+      if (d.ghost) d.ghost.remove();
+      if (d.srcTile) d.srcTile.style.opacity = "";
+      sbDragRef.current = { dragging: null, startX: 0, startY: 0, ghost: null };
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, []);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem("dauia-theme") || "dark"; } catch { return "dark"; }
   });
@@ -215,54 +285,6 @@ export default function DauiaApp() {
 
   const handleTab = (e) => { if (e.key === "Tab") { e.preventDefault(); const s = e.target.selectionStart; setSandboxCode(sandboxCode.substring(0, s) + "    " + sandboxCode.substring(e.target.selectionEnd)); setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s + 4; }, 0); } };
 
-  // Resizable panels state (percentages)
-  const [editorWidth, setEditorWidth] = useState(() => {
-    try { return parseFloat(localStorage.getItem("dauia-editor-w")) || 58; } catch { return 58; }
-  });
-  const [terminalHeight, setTerminalHeight] = useState(() => {
-    try { return parseFloat(localStorage.getItem("dauia-term-h")) || 35; } catch { return 35; }
-  });
-  const dragging = useRef(null);
-
-  useEffect(() => {
-    try { localStorage.setItem("dauia-editor-w", editorWidth); } catch {}
-  }, [editorWidth]);
-  useEffect(() => {
-    try { localStorage.setItem("dauia-term-h", terminalHeight); } catch {}
-  }, [terminalHeight]);
-
-  const startDrag = useCallback((type, e) => {
-    e.preventDefault();
-    dragging.current = type;
-    document.body.style.cursor = type === "vertical" ? "col-resize" : "row-resize";
-    document.body.style.userSelect = "none";
-  }, []);
-
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!dragging.current) return;
-      const sandbox = document.querySelector(".sandbox");
-      if (!sandbox) return;
-      const rect = sandbox.getBoundingClientRect();
-      if (dragging.current === "vertical") {
-        const pct = ((e.clientX - rect.left) / rect.width) * 100;
-        setEditorWidth(Math.min(Math.max(pct, 25), 80));
-      } else if (dragging.current === "horizontal") {
-        const pct = ((rect.bottom - e.clientY) / rect.height) * 100;
-        setTerminalHeight(Math.min(Math.max(pct, 15), 60));
-      }
-    };
-    const onUp = () => {
-      if (dragging.current) {
-        dragging.current = null;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      }
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  }, []);
 
   return (
     <div className={`root ${theme}`} ref={mainRef}>
@@ -324,24 +346,68 @@ export default function DauiaApp() {
 .module-row{display:flex;gap:10px;margin-bottom:8px;align-items:center}
 .textarea{width:100%;min-height:100px;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-family:var(--font);font-size:13px;resize:vertical;outline:none;transition:border-color .2s}.textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-g)}
 .icon-picker{display:flex;gap:6px;flex-wrap:wrap}.icon-opt{width:36px;height:36px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .15s}.icon-opt:hover,.icon-opt.sel{border-color:var(--accent);background:var(--accent-g)}
-.sandbox{display:flex;height:calc(100vh - 60px);overflow:hidden}
-.sb-editor{display:flex;flex-direction:column;border-right:none;flex-shrink:0}
-.sb-header{height:46px;display:flex;align-items:center;padding:0 16px;gap:10px;border-bottom:1px solid var(--border);background:var(--bg-card);flex-shrink:0}
-.sb-editor-area{flex:1;display:flex;overflow:hidden;background:var(--bg-input)}
-.ln{padding:14px 0;text-align:right;user-select:none;font-family:var(--mono);font-size:12px;line-height:1.75;color:var(--text-m);min-width:36px;padding-right:10px;border-right:1px solid var(--border);opacity:.5}
-.code-ta{width:100%;height:100%;background:transparent;color:var(--code-text);border:none;outline:none;font-family:var(--mono);font-size:13px;line-height:1.75;resize:none;padding:14px;tab-size:4;white-space:pre;overflow-wrap:normal;overflow-x:auto}.code-ta::selection{background:rgba(74,124,255,.22)}
-.sb-right{display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
-.sb-right-top{display:flex;flex-direction:column;overflow:hidden}
-.sb-right-bottom{display:flex;flex-direction:column;overflow:hidden;border-top:none}
-.resize-handle-v{width:6px;cursor:col-resize;background:var(--border);position:relative;flex-shrink:0;transition:background .15s;z-index:10}.resize-handle-v:hover,.resize-handle-v:active{background:var(--accent)}
-.resize-dots-v{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;gap:3px;opacity:.5}.resize-dots-v::before,.resize-dots-v::after{content:'';width:3px;height:3px;border-radius:50%;background:var(--text-m)}.resize-handle-v:hover .resize-dots-v{opacity:1}
-.resize-handle-h{height:6px;cursor:row-resize;background:var(--border);position:relative;flex-shrink:0;transition:background .15s;z-index:10}.resize-handle-h:hover,.resize-handle-h:active{background:var(--accent)}
-.resize-dots-h{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;gap:3px;opacity:.5}.resize-dots-h::before,.resize-dots-h::after{content:'';width:3px;height:3px;border-radius:50%;background:var(--text-m)}.resize-handle-h:hover .resize-dots-h{opacity:1}
-.sb-output{width:42%;min-width:280px;display:flex;flex-direction:column;background:var(--bg-input)}
-.sb-out-head{height:46px;display:flex;align-items:center;padding:0 16px;gap:6px;border-bottom:1px solid var(--border);background:var(--bg-card);font-size:12px;font-weight:600;color:var(--text-2);flex-shrink:0}
-.sb-console{flex:1;overflow:auto;padding:16px;font-family:var(--mono);font-size:12px;line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--console-text)}
-.sb-status{padding:8px 14px;border-top:1px solid var(--border);font-size:10px;color:var(--text-m);display:flex;justify-content:space-between;flex-shrink:0}
-.sb-libs{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card);display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0}.sb-lib{padding:3px 9px;border-radius:5px;font-size:10px;background:var(--bg-surface);color:var(--text-2);border:1px solid var(--border);font-family:var(--mono)}
+/* ═══ HYPRLAND SANDBOX ═══ */
+.hypr-sandbox{display:flex;flex-direction:column;height:calc(100vh - 60px);overflow:hidden;background:#020408;position:relative}
+.hypr-sandbox::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at center,rgba(8,145,178,.03) 1px,transparent 1px);background-size:32px 32px;pointer-events:none}
+
+/* Top bar */
+.hypr-bar{height:48px;display:flex;align-items:center;padding:0 16px;gap:12px;background:#0b0f19;border-bottom:2px solid rgba(8,145,178,.15);flex-shrink:0;position:relative;z-index:10}
+.hypr-bar-left{display:flex;align-items:center;gap:8px}
+.hypr-logo{width:28px;height:28px;background:linear-gradient(135deg,#06b6d4,#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;border-radius:0}
+.hypr-bar-title{font-family:var(--mono);font-weight:700;font-size:14px;color:#22d3ee;text-transform:uppercase;letter-spacing:1px}
+.hypr-bar-right{display:flex;align-items:center;gap:8px;margin-left:auto}
+.hypr-btn{border-radius:0!important;border-color:rgba(8,145,178,.2)!important;background:#05080f!important;color:#94a3b8!important;font-family:var(--mono)!important;text-transform:uppercase;letter-spacing:.5px;font-size:10px!important}
+.hypr-btn:hover{border-color:#22d3ee!important;color:#22d3ee!important}
+.hypr-btn-primary{border-radius:0!important;background:#06b6d4!important;border-color:transparent!important;color:#050914!important;font-family:var(--mono)!important;font-weight:700!important;text-transform:uppercase;letter-spacing:.5px;font-size:11px!important;padding:6px 18px!important}
+.hypr-btn-primary:hover{background:#22d3ee!important;box-shadow:4px 4px 0 0 rgba(6,182,212,.3);transform:translate(-2px,-2px)}
+
+/* Layout controls */
+.hypr-layout-ctrl{display:flex;align-items:center;gap:4px;background:#05080f;padding:3px 8px;border:1px solid rgba(8,145,178,.15)}
+.hypr-layout-label{font-family:var(--mono);font-size:9px;color:#475569;text-transform:uppercase;letter-spacing:1px;margin-right:4px}
+.hypr-layout-ctrl button{width:22px;height:22px;border:1px solid rgba(8,145,178,.15);background:transparent;color:#475569;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;padding:0;transition:all .15s;border-radius:0}
+.hypr-layout-ctrl button:hover{color:#22d3ee;border-color:rgba(8,145,178,.4)}
+.hypr-layout-ctrl button.act{background:rgba(8,145,178,.15);color:#22d3ee;border-color:rgba(34,211,238,.4)}
+
+/* Tiling container */
+.hypr-tiles{display:flex;flex:1;gap:8px;padding:8px;overflow:hidden;position:relative;z-index:1}
+
+/* Individual tile (window) */
+.hypr-tile{display:flex;flex-direction:column;overflow:hidden;border:2px solid rgba(8,145,178,.12);background:#070b14;transition:all .2s,opacity .15s,border-color .2s}
+.hypr-tile:hover{border-color:rgba(8,145,178,.3)}
+.hypr-tile.focused{border-color:rgba(34,211,238,.5);box-shadow:0 0 20px rgba(34,211,238,.1);z-index:2}
+.hypr-tile.hypr-drop-target{border-color:#22d3ee!important;box-shadow:0 0 30px rgba(34,211,238,.25)!important;background:#0a1020!important}
+.hypr-ghost{border-color:#22d3ee!important;box-shadow:0 0 40px rgba(34,211,238,.3)!important;border-radius:0!important}
+
+/* Titlebar */
+.hypr-titlebar{height:26px;display:flex;align-items:center;gap:6px;padding:0 8px;background:#05080f;border-bottom:1px solid rgba(8,145,178,.1);flex-shrink:0;user-select:none;transition:background .15s}
+.hypr-titlebar.active{background:rgba(8,145,178,.06)}
+.hypr-titlebar:active{cursor:grabbing}
+.hypr-titlebar-icon{font-family:var(--mono);font-size:10px;color:#22d3ee;font-weight:700}
+.hypr-titlebar-name{font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#22d3ee;opacity:.8}
+.hypr-titlebar-arrows{display:flex;gap:2px;margin-left:auto}
+.hypr-titlebar-arrows button{width:16px;height:16px;border:none;background:transparent;color:#475569;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;padding:0;transition:all .12s;font-family:var(--mono);border-radius:0}
+.hypr-titlebar-arrows button:hover:not(:disabled){color:#22d3ee;background:rgba(8,145,178,.15)}
+.hypr-titlebar-arrows button:disabled{opacity:.15;cursor:default}
+
+/* Tile body */
+.hypr-tile-body{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#090d16}
+
+/* Editor panel */
+.hypr-libs{padding:5px 12px;border-bottom:1px solid rgba(8,145,178,.08);background:#05080f;display:flex;gap:4px;flex-wrap:wrap;flex-shrink:0}
+.hypr-lib{padding:2px 7px;font-size:9px;background:transparent;color:#475569;border:1px solid rgba(8,145,178,.1);font-family:var(--mono);text-transform:uppercase;letter-spacing:.3px;border-radius:0}
+.hypr-editor-area{flex:1;display:flex;overflow:hidden;background:#03060a}
+.hypr-ln{padding:14px 0;text-align:right;user-select:none;font-family:var(--mono);font-size:12px;line-height:1.78;color:#1e293b;min-width:36px;padding-right:10px;border-right:1px solid rgba(8,145,178,.06)}
+.hypr-ta{width:100%;height:100%;background:transparent;color:#cbd5e1;border:none;outline:none;font-family:var(--mono);font-size:13px;line-height:1.78;resize:none;padding:14px;tab-size:4;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+.hypr-ta::selection{background:rgba(34,211,238,.15)}
+
+/* Console & Terminal */
+.hypr-console{flex:1;overflow:auto;padding:14px;font-family:var(--mono);font-size:12px;line-height:1.78;white-space:pre-wrap;word-break:break-word;color:#94a3b8;background:#03060a}
+.hypr-term{color:#34d399}
+.hypr-prompt{color:#475569}
+.hypr-blink{animation:pulse 1.5s infinite}
+.hypr-status{padding:6px 12px;border-top:1px solid rgba(8,145,178,.08);font-size:9px;color:#334155;display:flex;justify-content:space-between;flex-shrink:0;font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;background:#05080f}
+
+@media(max-width:768px){.hypr-tiles{flex-direction:column!important}.hypr-tile{flex:1!important}.hypr-bar{flex-wrap:wrap;height:auto;padding:8px 12px;gap:8px}}
 .footer{border-top:1px solid var(--border);padding:40px 36px 28px;display:flex;justify-content:space-between;align-items:start;max-width:1140px;margin:60px auto 0;flex-wrap:wrap;gap:28px}
 .footer-brand p{color:var(--text-m);font-size:12px;max-width:250px;line-height:1.7;margin-top:8px;font-weight:400}
 .footer-links{display:flex;gap:40px;flex-wrap:wrap}.footer-col h5{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-m);margin-bottom:12px}.footer-col a{display:block;font-size:12.5px;color:var(--text-2);text-decoration:none;padding:3px 0;cursor:pointer;transition:color .15s;font-weight:400}.footer-col a:hover{color:var(--accent-b)}
@@ -358,7 +424,7 @@ export default function DauiaApp() {
 .root.light .user-menu{box-shadow:0 12px 32px rgba(0,0,0,.1)}
 .root.light .btn-hp{box-shadow:0 4px 18px rgba(53,99,233,.15)}
 .root.light .btn-hp:hover{box-shadow:0 6px 24px rgba(53,99,233,.2)}
-@media(max-width:768px){.hero{padding:50px 18px 40px}.nav{padding:0 14px}.section{padding:44px 18px}.feat-grid,.c-grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.sandbox{flex-direction:column}.sb-editor{width:100%!important}.sb-right{width:100%!important}.resize-handle-v{display:none}.sb-output{width:100%}.footer{flex-direction:column}.form-grid{grid-template-columns:1fr}.nav-links{gap:2px}}
+@media(max-width:768px){.hero{padding:50px 18px 40px}.nav{padding:0 14px}.section{padding:44px 18px}.feat-grid,.c-grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.footer{flex-direction:column}.form-grid{grid-template-columns:1fr}.nav-links{gap:2px}}
       `}</style>
 
       {/* NAV */}
@@ -466,25 +532,71 @@ export default function DauiaApp() {
         </>)}
       </section>)}
 
-      {/* SANDBOX */}
-      {page==="sandbox"&&(<div className="sandbox">
-        <div className="sb-editor" style={{width: editorWidth + "%"}}>
-          <div className="sb-header"><div style={{display:"flex",alignItems:"center",gap:7}}><div className="nav-logo-mark" style={{width:24,height:24,fontSize:10,borderRadius:6}}>d</div><span style={{fontWeight:600,fontSize:13}}>Python AI Sandbox</span></div><span style={{flex:1}} /><button className="btn-sm" onClick={() => setSandboxCode("")}>{I.trash} Vider</button><button className="btn-sm primary" onClick={runSandbox} disabled={isRunning}>{I.play} Exécuter</button></div>
-          <div className="sb-libs">{["numpy","pandas","matplotlib","scikit-learn","scipy","seaborn","statsmodels"].map(l=>(<span key={l} className="sb-lib">{l}</span>))}</div>
-          <div className="sb-editor-area"><div className="ln">{sandboxCode.split("\n").map((_,i)=><div key={i}>{i+1}</div>)}</div><textarea className="code-ta" value={sandboxCode} onChange={e => setSandboxCode(e.target.value)} onKeyDown={handleTab} spellCheck={false} /></div>
+      {/* ═══ HYPRLAND SANDBOX ═══ */}
+      {page==="sandbox"&&(<div className="hypr-sandbox">
+        {/* Hyprland top bar */}
+        <div className="hypr-bar">
+          <div className="hypr-bar-left"><div className="hypr-logo">d</div><span className="hypr-bar-title">DAU'IA WM</span></div>
+          <div className="hypr-layout-ctrl">
+            <span className="hypr-layout-label">Layout</span>
+            <button className={sbLayout==="row"?"act":""} onClick={()=>setSbLayout("row")} title="Horizontal">⫼</button>
+            <button className={sbLayout==="col"?"act":""} onClick={()=>setSbLayout("col")} title="Vertical">⊟</button>
+          </div>
+          <div className="hypr-bar-right">
+            <button className="btn-sm hypr-btn" onClick={() => setSandboxCode("")}>{I.trash} Vider</button>
+            <button className="btn-sm hypr-btn-primary" onClick={runSandbox} disabled={isRunning}>{I.play} EXÉCUTER</button>
+          </div>
         </div>
-        <div className="resize-handle-v" onMouseDown={(e) => startDrag("vertical", e)}><div className="resize-dots-v" /></div>
-        <div className="sb-right" style={{width: (100 - editorWidth) + "%"}}>
-          <div className="sb-right-top" style={{height: (100 - terminalHeight) + "%"}}>
-            <div className="sb-out-head">{I.terminal} Console</div>
-            <div className="sb-console">{isRunning?<span style={{color:"var(--text-m)",animation:"pulse 1.5s infinite"}}>Execution...</span>:consoleOut||<span style={{color:"var(--text-m)"}}>{">>> "}Cliquez Executer pour lancer votre code.</span>}</div>
-          </div>
-          <div className="resize-handle-h" onMouseDown={(e) => startDrag("horizontal", e)}><div className="resize-dots-h" /></div>
-          <div className="sb-right-bottom" style={{height: terminalHeight + "%"}}>
-            <div className="sb-out-head">{I.terminal} Terminal</div>
-            <div className="sb-console" style={{color:"var(--success)"}}><span style={{color:"var(--text-m)"}}>dauia@sandbox</span>:<span style={{color:"var(--accent-b)"}}>~</span>$ {isRunning ? <span style={{animation:"pulse 1.5s infinite"}}>python main.py</span> : consoleOut ? "python main.py\n" + consoleOut : ""}</div>
-            <div className="sb-status"><span>Python 3.11 · Pyodide (WASM)</span><span>numpy · pandas · sklearn · matplotlib</span></div>
-          </div>
+
+        {/* Tiling area */}
+        <div className="hypr-tiles" style={{flexDirection: sbLayout}}>
+          {sbPanels.map((panelId, idx) => {
+            const isFocused = sbFocused === panelId;
+            const titles = { editor: "ÉDITEUR PYTHON", console: "CONSOLE SORTIE", terminal: "TERMINAL" };
+            const icons = { editor: "⟨/⟩", console: "▶", terminal: "$_" };
+            return (
+              <div
+                key={panelId}
+                className={`hypr-tile ${isFocused ? "focused" : ""}`}
+                data-panel={panelId}
+                onClick={() => setSbFocused(panelId)}
+                style={{flex: panelId === "editor" ? 1.4 : 1}}
+              >
+                {/* Hyprland titlebar — draggable */}
+                <div
+                  className={`hypr-titlebar ${isFocused ? "active" : ""}`}
+                  onMouseDown={(e) => sbDragStart(panelId, e)}
+                  style={{cursor:"grab"}}
+                >
+                  <span className="hypr-titlebar-icon">{icons[panelId]}</span>
+                  <span className="hypr-titlebar-name">{titles[panelId]}</span>
+                  <div className="hypr-titlebar-arrows">
+                    <button onClick={(e)=>{e.stopPropagation();sbMovePanel(idx,-1);}} disabled={idx===0}>
+                      {sbLayout==="row" ? "←" : "↑"}
+                    </button>
+                    <button onClick={(e)=>{e.stopPropagation();sbMovePanel(idx,1);}} disabled={idx===sbPanels.length-1}>
+                      {sbLayout==="row" ? "→" : "↓"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Panel content */}
+                <div className="hypr-tile-body">
+                  {panelId === "editor" && (<>
+                    <div className="hypr-libs">{["numpy","pandas","matplotlib","scikit-learn","scipy","seaborn","statsmodels"].map(l=>(<span key={l} className="hypr-lib">{l}</span>))}</div>
+                    <div className="hypr-editor-area"><div className="hypr-ln">{sandboxCode.split("\n").map((_,i)=><div key={i}>{i+1}</div>)}</div><textarea className="hypr-ta" value={sandboxCode} onChange={e=>setSandboxCode(e.target.value)} onKeyDown={handleTab} spellCheck={false} /></div>
+                  </>)}
+                  {panelId === "console" && (
+                    <div className="hypr-console">{isRunning?<span className="hypr-blink">{">>>"} Exécution en cours...</span>:consoleOut||<span style={{color:"#475569"}}>{">>>"} Cliquez EXÉCUTER pour lancer votre code.</span>}</div>
+                  )}
+                  {panelId === "terminal" && (<>
+                    <div className="hypr-console hypr-term"><span className="hypr-prompt">dauia@workspace</span>:<span style={{color:"#22d3ee"}}>~</span>$ {isRunning ? <span className="hypr-blink">python main.py</span> : consoleOut ? <>python main.py{"\n"}<span style={{color:"#94a3b8"}}>{consoleOut}</span></> : ""}</div>
+                    <div className="hypr-status"><span>Python 3.11 · Pyodide (WASM)</span><span>numpy · pandas · sklearn · matplotlib</span></div>
+                  </>)}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>)}
 
