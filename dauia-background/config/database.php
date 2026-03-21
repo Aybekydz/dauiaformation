@@ -57,6 +57,7 @@ define('SMTP_USER',       getenv('SMTP_USER') ?: '');
 define('SMTP_PASS',       getenv('SMTP_PASS') ?: '');
 define('SMTP_FROM_NAME',  getenv('SMTP_FROM_NAME') ?: "DAU'IA");
 define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: 'noreply@dauphine.psl.eu');
+define('SMTP_ENCRYPTION', getenv('SMTP_ENCRYPTION') ?: 'tls');
 
 // ── Rate Limiting ────────────────────────────────────────────
 define('RATE_LIMIT_REGISTER', (int)(getenv('RATE_LIMIT_REGISTER') ?: 5));
@@ -100,49 +101,77 @@ class Database {
 // Liste des modérateurs (chargée depuis moderators.json)
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Gère la liste des modérateurs depuis le fichier config/moderators.json.
+ *
+ * Structure attendue du JSON :
+ *   { "moderators": ["email1@..."] }
+ *
+ * Logique de détermination du rôle à l'inscription :
+ *   1. Si l'email figure dans "moderators" → rôle "moderateur"
+ *   2. Sinon                               → rôle "etudiant" (défaut sécurisé)
+ *
+ * Le rôle n'est JAMAIS choisi par l'utilisateur côté client.
+ */
 class ModeratorList {
-    private static ?array $list = null;
-    
+    /** @var array|null Cache des emails modérateurs (normalisés en minuscules) */
+    private static ?array $moderators = null;
+
     private const FILE_PATH = __DIR__ . '/moderators.json';
 
     /**
-     * Charge et retourne la liste des emails modérateurs
+     * Charge le fichier JSON et peuple le cache interne.
+     * Appelé automatiquement au premier accès.
+     */
+    private static function load(): void {
+        if (self::$moderators !== null) return;
+
+        self::$moderators = [];
+
+        if (!file_exists(self::FILE_PATH)) return;
+
+        $json = json_decode(file_get_contents(self::FILE_PATH), true);
+        if (!is_array($json)) return;
+
+        if (isset($json['moderators']) && is_array($json['moderators'])) {
+            self::$moderators = array_map('strtolower', $json['moderators']);
+        }
+    }
+
+    /**
+     * Retourne la liste des emails modérateurs
      */
     public static function getEmails(): array {
-        if (self::$list === null) {
-            if (!file_exists(self::FILE_PATH)) {
-                self::$list = [];
-                return self::$list;
-            }
-            $json = json_decode(file_get_contents(self::FILE_PATH), true);
-            if (!$json || !isset($json['moderators'])) {
-                self::$list = [];
-                return self::$list;
-            }
-            // Normaliser en minuscules
-            self::$list = array_map('strtolower', $json['moderators']);
-        }
-        return self::$list;
+        self::load();
+        return self::$moderators;
     }
 
     /**
      * Vérifie si un email est dans la liste des modérateurs
      */
     public static function isModerator(string $email): bool {
-        return in_array(strtolower(trim($email)), self::getEmails(), true);
+        self::load();
+        return in_array(strtolower(trim($email)), self::$moderators, true);
     }
 
     /**
-     * Détermine le rôle à attribuer pour un email donné
+     * Détermine le rôle à attribuer pour un email donné.
+     * moderateur si dans la liste, etudiant sinon.
      */
     public static function getRoleForEmail(string $email): string {
-        return self::isModerator($email) ? 'moderateur' : 'etudiant';
+        self::load();
+        $normalized = strtolower(trim($email));
+
+        if (in_array($normalized, self::$moderators, true)) {
+            return 'moderateur';
+        }
+        return 'etudiant';
     }
 
     /**
      * Force le rechargement (utile si le fichier change en runtime)
      */
     public static function reload(): void {
-        self::$list = null;
+        self::$moderators = null;
     }
 }
