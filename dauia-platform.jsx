@@ -128,9 +128,9 @@ function UserMenu({ user, onLogout, onAdmin }) {
           <div style={{ padding: "8px 12px 10px", borderBottom: "1px solid var(--border)" }}>
             <div style={{ fontWeight: 600, fontSize: 13 }}>{user.name}</div>
             <div style={{ fontSize: 11, color: "var(--text-m)" }}>{user.email}</div>
-            {user.role === "admin" && <span className="tag" style={{ marginTop: 4, display: "inline-block", borderColor: "rgba(74,124,255,.3)", color: "var(--accent-b)" }}>Admin</span>}
+            {user.role === "moderateur" && <span className="tag" style={{ marginTop: 4, display: "inline-block", borderColor: "rgba(74,124,255,.3)", color: "var(--accent-b)" }}>Admin</span>}
           </div>
-          {user.role === "admin" && <button onClick={() => { onAdmin(); setOpen(false); }}>{I.settings} Administration</button>}
+          {user.role === "moderateur" && <button onClick={() => { onAdmin(); setOpen(false); }}>{I.settings} Administration</button>}
           <button onClick={() => { onLogout(); setOpen(false); }}>{I.logout} Déconnexion</button>
         </div>
       )}
@@ -146,20 +146,36 @@ export default function DauiaApp() {
   const [authPage, setAuthPage] = useState(null);
   const [authForm, setAuthForm] = useState({ email: "", password: "", name: "", confirmPassword: "" });
   const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetToken, setResetToken] = useState(null);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetForm, setResetForm] = useState({ password: "", confirmPassword: "" });
+  const [resetError, setResetError] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [toast, setToast] = useState("");
   const [page, setPage] = useState("home");
   const [pageTransition, setPageTransition] = useState(true);
   const [scrollY, setScrollY] = useState(0);
   const mainRef = useRef(null);
   const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [enrollments, setEnrollments] = useState([]);
   const courseIcons = ["book","python","brain","bolt","chat","chart","database","flask","target","rocket","robot","compass"];
-  const emptyCourse = { title: "", subtitle: "", description: "", icon: "book", level: "Débutant", duration: "", tags: "", modules: [{ title: "", lessons: "" }] };
+  const emptyStep = { type: "lesson", title: "", url: "", content: "", description: "", code: "", solution_code: "", summary: "", transcription: "", resources: "" };
+  const emptyCourse = { title: "", subtitle: "", description: "", icon: "book", level: "Débutant", duration: "", tags: "", modules: [{ title: "Module 1", steps: [] }] };
+  const flatSteps = (c) => (c?.modules?.length ? c.modules.flatMap(m => m.steps || []) : []);
   const [editingCourse, setEditingCourse] = useState(null);
   const [courseForm, setCourseForm] = useState({ ...emptyCourse });
   const [adminNotif, setAdminNotif] = useState("");
   const [sandboxCode, setSandboxCode] = useState("# dauia.com — Python AI Sandbox\n# Bibliothèques : numpy, pandas, matplotlib,\n# scikit-learn, scipy, seaborn, statsmodels\n\nimport numpy as np\nimport pandas as pd\nfrom sklearn.linear_model import LinearRegression\n\nX = np.array([[1],[2],[3],[4],[5]])\ny = np.array([2.1, 4.0, 5.8, 8.1, 9.9])\n\nmodel = LinearRegression()\nmodel.fit(X, y)\n\nprint(f\"Coefficient : {model.coef_[0]:.2f}\")\nprint(f\"Intercept   : {model.intercept_:.2f}\")\nprint(f\"R² score    : {model.score(X, y):.4f}\")\nprint(f\"Prédiction x=10 : {model.predict([[10]])[0]:.2f}\")\n");
   const [consoleOut, setConsoleOut] = useState("");
   const [isRunning, setIsRunning] = useState(false);
+  const pyodideRef = useRef(null);
+  const [activeCourse, setActiveCourse] = useState(null);
+  const [activeModuleIdx, setActiveModuleIdx] = useState(0);
+  const [activeStepIdx, setActiveStepIdx] = useState(0);
 
   // ═══ HYPRLAND TILING STATE ═══
   const [sbLayout, setSbLayout] = useState("row"); // 'row' | 'col'
@@ -244,43 +260,381 @@ export default function DauiaApp() {
 
   useEffect(() => { const el = mainRef.current; if (!el) return; const fn = () => setScrollY(el.scrollTop); el.addEventListener("scroll", fn, { passive: true }); return () => el.removeEventListener("scroll", fn); }, [page]);
 
+  // Restore session from stored token on mount
+  useEffect(() => {
+    const token = localStorage.getItem("dauia-token");
+    if (token) {
+      fetch("/api/auth/me", { headers: { "Authorization": "Bearer " + token } })
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(data => { if (data.user) setUser(data.user); else localStorage.removeItem("dauia-token"); })
+        .catch(() => { localStorage.removeItem("dauia-token"); });
+    }
+  }, []);
+
+  // ═══ API HELPERS ═══
+  const getAuthHeaders = (json = false) => {
+    const h = {};
+    const t = localStorage.getItem("dauia-token");
+    if (t) h["Authorization"] = "Bearer " + t;
+    if (json) h["Content-Type"] = "application/json";
+    return h;
+  };
+
+  const loadCourses = async () => {
+    setCoursesLoading(true);
+    try {
+      const endpoint = user?.role === "moderateur" ? "/api/admin/courses" : "/api/courses";
+      const res = await fetch(endpoint, { headers: getAuthHeaders() });
+      if (!res.ok) { setCourses([]); return; }
+      const data = await res.json();
+      setCourses(data.courses || []);
+    } catch {
+      setCourses([]);
+    } finally {
+      setCoursesLoading(false);
+    }
+  };
+
+  const loadEnrollments = async () => {
+    if (!user) { setEnrollments([]); return; }
+    try {
+      const res = await fetch("/api/enrollments", { headers: getAuthHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      setEnrollments(data.enrollments || []);
+    } catch {}
+  };
+
+  // Load courses when user changes (including after session restore)
+  useEffect(() => { loadCourses(); }, [user]);
+
+  // Load enrollments when user is set
+  useEffect(() => { loadEnrollments(); }, [user]);
+
+  // Detect reset-password token in URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const path = window.location.pathname;
+    if (token && path.endsWith("/reset-password")) {
+      setResetToken(token);
+      setShowResetModal(true);
+    }
+    // Also check hash-based routing: #/reset-password?token=...
+    const hash = window.location.hash;
+    if (hash.includes("reset-password")) {
+      const hashParams = new URLSearchParams(hash.split("?")[1] || "");
+      const hashToken = hashParams.get("token");
+      if (hashToken) {
+        setResetToken(hashToken);
+        setShowResetModal(true);
+      }
+    }
+  }, []);
+
   const isDauphineEmail = (email) => /@(dauphine\.psl\.eu|dauphine\.eu|dauphine\.psl\.fr)$/i.test(email);
 
-  const handleAuth = (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault(); setAuthError("");
     if (!isDauphineEmail(authForm.email)) { setAuthError("Seules les adresses @dauphine.psl.eu sont acceptées."); return; }
     if (authPage === "register") {
       if (!authForm.name.trim()) { setAuthError("Le nom est requis."); return; }
       if (authForm.password.length < 8) { setAuthError("Minimum 8 caractères pour le mot de passe."); return; }
       if (authForm.password !== authForm.confirmPassword) { setAuthError("Les mots de passe ne correspondent pas."); return; }
-      setUser({ email: authForm.email, name: authForm.name, role: authForm.email.startsWith("admin") ? "admin" : "student" });
     } else {
       if (!authForm.password) { setAuthError("Mot de passe requis."); return; }
-      setUser({ email: authForm.email, name: authForm.email.split("@")[0].replace(".", " "), role: authForm.email.startsWith("admin") ? "admin" : "student" });
     }
-    setAuthPage(null); setAuthForm({ email: "", password: "", name: "", confirmPassword: "" });
+    setAuthLoading(true);
+    try {
+      const endpoint = authPage === "register" ? "/api/auth/register" : "/api/auth/login";
+      const payload = authPage === "register"
+        ? { name: authForm.name, email: authForm.email, password: authForm.password }
+        : { email: authForm.email, password: authForm.password };
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAuthError(data.error || data.message || "Identifiants incorrects.");
+        return;
+      }
+      if (authPage === "register") {
+        showToast(data.message || "Inscription réussie ! Vérifiez votre email.");
+        setAuthPage("login");
+        setAuthForm({ email: authForm.email, password: "", name: "", confirmPassword: "" });
+      } else {
+        if (!data.token) { setAuthError("Erreur serveur : aucun token reçu."); return; }
+        localStorage.setItem("dauia-token", data.token);
+        setUser(data.user);
+        setAuthPage(null);
+        setAuthForm({ email: "", password: "", name: "", confirmPassword: "" });
+        showToast("Connecté en tant que " + (data.user?.name || ""));
+      }
+    } catch {
+      setAuthError("Impossible de contacter le serveur.");
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
-  const saveCourse = () => {
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 4000); };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setAuthError("");
+    if (!forgotEmail.trim()) { setAuthError("Veuillez saisir votre email."); return; }
+    if (!isDauphineEmail(forgotEmail)) { setAuthError("Seules les adresses @dauphine.psl.eu sont acceptées."); return; }
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setAuthError(data.message || "Une erreur est survenue."); return; }
+      showToast("Si cet email existe, un lien de réinitialisation vous a été envoyé.");
+      setAuthPage(null);
+      setForgotEmail("");
+    } catch {
+      setAuthError("Impossible de contacter le serveur.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setResetError("");
+    if (resetForm.password.length < 8) { setResetError("Minimum 8 caractères pour le mot de passe."); return; }
+    if (resetForm.password !== resetForm.confirmPassword) { setResetError("Les mots de passe ne correspondent pas."); return; }
+    setResetLoading(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resetToken, password: resetForm.password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setResetError(data.message || "Lien invalide ou expiré."); return; }
+      showToast("Mot de passe mis à jour avec succès !");
+      setShowResetModal(false);
+      setResetToken(null);
+      setResetForm({ password: "", confirmPassword: "" });
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname.replace(/\/reset-password$/, "/"));
+      setAuthPage("login");
+    } catch {
+      setResetError("Impossible de contacter le serveur.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const saveCourse = async () => {
     if (!courseForm.title.trim()) { setAdminNotif("Le titre est requis."); setTimeout(() => setAdminNotif(""), 2500); return; }
-    const c = { ...courseForm, id: editingCourse?.id || "c-" + Date.now(), tags: typeof courseForm.tags === "string" ? courseForm.tags.split(",").map(t => t.trim()).filter(Boolean) : courseForm.tags, createdAt: editingCourse?.createdAt || new Date().toISOString() };
-    setCourses(prev => { const idx = prev.findIndex(x => x.id === c.id); if (idx >= 0) { const n = [...prev]; n[idx] = c; return n; } return [...prev, c]; });
-    setEditingCourse(null); setCourseForm({ ...emptyCourse });
-    setAdminNotif("Formation enregistree."); setTimeout(() => setAdminNotif(""), 2500);
+    const payload = {
+      ...courseForm,
+      tags: typeof courseForm.tags === "string" ? courseForm.tags.split(",").map(t => t.trim()).filter(Boolean) : courseForm.tags,
+      is_published: courseForm.is_published ?? true,
+    };
+    try {
+      const isEdit = editingCourse?.id && typeof editingCourse.id === "number";
+      const url = isEdit ? "/api/admin/courses/" + editingCourse.id : "/api/admin/courses";
+      const method = isEdit ? "PUT" : "POST";
+      const res = await fetch(url, { method, headers: getAuthHeaders(true), body: JSON.stringify(payload) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setAdminNotif(data.error || "Erreur lors de l'enregistrement."); setTimeout(() => setAdminNotif(""), 2500); return; }
+      setEditingCourse(null); setCourseForm({ ...emptyCourse });
+      setAdminNotif("Formation enregistrée."); setTimeout(() => setAdminNotif(""), 2500);
+      loadCourses();
+    } catch {
+      setAdminNotif("Impossible de contacter le serveur."); setTimeout(() => setAdminNotif(""), 2500);
+    }
   };
 
-  const deleteCourse = (id) => { setCourses(prev => prev.filter(c => c.id !== id)); setAdminNotif("Formation supprimee."); setTimeout(() => setAdminNotif(""), 2500); };
+  const deleteCourse = async (id) => {
+    try {
+      const res = await fetch("/api/admin/courses/" + id, { method: "DELETE", headers: getAuthHeaders() });
+      if (!res.ok) { const data = await res.json().catch(() => ({})); showToast(data.error || "Erreur de suppression."); return; }
+      setAdminNotif("Formation supprimée."); setTimeout(() => setAdminNotif(""), 2500);
+      loadCourses();
+    } catch {
+      showToast("Impossible de contacter le serveur.");
+    }
+  };
 
-  const startEdit = (c) => { setEditingCourse(c); setCourseForm({ ...c, tags: Array.isArray(c.tags) ? c.tags.join(", ") : c.tags }); };
+  const startEdit = async (c) => {
+    try {
+      const res = await fetch("/api/admin/courses/" + c.id, { headers: getAuthHeaders() });
+      if (!res.ok) { showToast("Impossible de charger la formation."); return; }
+      const data = await res.json();
+      const full = data.course;
+      // Normalize step_type → type for the form
+      if (full.modules) full.modules.forEach(m => (m.steps || []).forEach(s => { if (s.step_type && !s.type) s.type = s.step_type; }));
+      const form = { ...full, tags: Array.isArray(full.tags) ? full.tags.join(", ") : full.tags };
+      if (!form.modules?.length) form.modules = [{ title: "Module 1", steps: [] }];
+      form.modules = form.modules.map(m => ({ ...m, steps: m.steps || [] }));
+      setEditingCourse(full); setCourseForm(form);
+    } catch { showToast("Impossible de contacter le serveur."); }
+  };
 
+  // ═══ AUTO-CORRECTION HELPERS ═══
+  const currentStep = activeCourse?.modules?.[activeModuleIdx]?.steps?.[activeStepIdx] || null;
+  const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const stripHtml = (s) => String(s).replace(/<[^>]*>/g, '');
+
+  const goToNextStep = () => {
+    if (!activeCourse) return;
+    const mods = activeCourse.modules;
+    for (let m = activeModuleIdx; m < mods.length; m++) {
+      const startS = (m === activeModuleIdx) ? activeStepIdx + 1 : 0;
+      const steps = mods[m].steps || [];
+      for (let s = startS; s < steps.length; s++) {
+        if (steps[s].step_type === "code" || steps[s].type === "code") {
+          setActiveModuleIdx(m);
+          setActiveStepIdx(s);
+          setSandboxCode(steps[s].code || "# Écrivez votre code ici\n");
+          setConsoleOut("");
+          return;
+        }
+      }
+    }
+    showToast("Formation terminée ! Bravo !");
+    setActiveCourse(null);
+    loadEnrollments();
+    navigate("catalog");
+  };
+
+  const startCourse = async (course) => {
+    if (!user) { setAuthPage("login"); return; }
+    // Enroll if not already enrolled
+    const alreadyEnrolled = enrollments.some(e => e.course_id === course.id);
+    if (!alreadyEnrolled) {
+      try {
+        const res = await fetch("/api/enrollments", { method: "POST", headers: getAuthHeaders(true), body: JSON.stringify({ course_id: course.id }) });
+        if (!res.ok && res.status !== 409) { const d = await res.json().catch(() => ({})); showToast(d.error || "Erreur d'inscription."); return; }
+      } catch { showToast("Impossible de contacter le serveur."); return; }
+    }
+    // Fetch full course structure (with modules & steps)
+    try {
+      const res = await fetch("/api/courses/" + course.id, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const fullCourse = data.course;
+      const mods = fullCourse.modules || [];
+      for (let m = 0; m < mods.length; m++) {
+        const steps = mods[m].steps || [];
+        for (let s = 0; s < steps.length; s++) {
+          if (steps[s].step_type === "code" || steps[s].type === "code") {
+            setActiveCourse(fullCourse);
+            setActiveModuleIdx(m);
+            setActiveStepIdx(s);
+            setSandboxCode(steps[s].code || "# Écrivez votre code ici\n");
+            setConsoleOut("");
+            navigate("sandbox");
+            loadEnrollments();
+            return;
+          }
+        }
+      }
+      showToast("Aucune étape de code dans cette formation.");
+    } catch { showToast("Impossible de charger la formation."); }
+  };
+
+  // ═══ PYODIDE EXECUTION + VALIDATION ═══
   const runSandbox = async () => {
-    setIsRunning(true); setConsoleOut(">>> Exécution en cours...\n");
-    await new Promise(r => setTimeout(r, 700 + Math.random() * 500));
-    let out = "";
-    const prints = [...sandboxCode.matchAll(/print\s*\(\s*f?"([^"]*?)"\s*\)/g)];
-    if (prints.length > 0) prints.forEach(m => { out += m[1].replace(/\{[^}]+\}/g, () => (Math.random() * 10).toFixed(2)) + "\n"; });
-    else out = "(aucune sortie — ajoutez des print())";
-    setConsoleOut(out); setIsRunning(false);
+    setIsRunning(true);
+    setConsoleOut('<span style="color:#64748b">&gt;&gt;&gt; Initialisation...</span>\n');
+    try {
+      // Load Pyodide script if not present
+      if (!window.loadPyodide) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js';
+          s.onload = resolve;
+          s.onerror = () => reject(new Error('Impossible de charger Pyodide'));
+          document.head.appendChild(s);
+        });
+      }
+      // Initialize Pyodide instance (cached)
+      if (!pyodideRef.current) {
+        setConsoleOut('<span style="color:#64748b">⏳ Initialisation de Python (première fois)...</span>\n');
+        pyodideRef.current = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/' });
+      }
+      const pyodide = pyodideRef.current;
+
+      // Load packages from imports in student code
+      setConsoleOut('<span style="color:#64748b">📦 Chargement des bibliothèques...</span>\n');
+      await pyodide.loadPackagesFromImports(sandboxCode);
+
+      // Setup stdout capture
+      pyodide.runPython(`import sys\nfrom io import StringIO\n__dauia_out = StringIO()\nsys.stdout = __dauia_out`);
+
+      setConsoleOut('<span style="color:#64748b">&gt;&gt;&gt; Exécution en cours...</span>\n');
+
+      // Execute student code
+      let stdoutText = '';
+      try {
+        await pyodide.runPythonAsync(sandboxCode);
+        stdoutText = pyodide.runPython('__dauia_out.getvalue()');
+      } catch (err) {
+        try { stdoutText = pyodide.runPython('__dauia_out.getvalue()'); } catch {}
+        const errStr = String(err.message || err);
+        setConsoleOut(
+          (stdoutText ? escapeHtml(stdoutText) : '') +
+          '\n<span style="color:#ef4444">❌ ' + escapeHtml(errStr) + '</span>'
+        );
+        setIsRunning(false);
+        return;
+      }
+
+      let output = stdoutText ? escapeHtml(stdoutText) : '<span style="color:#64748b">(aucune sortie — ajoutez des print())</span>';
+
+      // ── Auto-correction: only in course mode with solution_code ──
+      if ((currentStep?.type === 'code' || currentStep?.step_type === 'code') && currentStep?.solution_code?.trim()) {
+        try {
+          // Reset stdout, run solution_code in same context
+          pyodide.runPython(`__dauia_out = StringIO()\nsys.stdout = __dauia_out`);
+          await pyodide.runPythonAsync(currentStep.solution_code);
+
+          // All asserts passed
+          output += '\n<span style="color:#22c55e;font-weight:bold">✅ Code validé avec succès !</span>';
+          setConsoleOut(output);
+          showToast("Étape validée !");
+
+          // Save progress (API call)
+          try {
+            if (currentStep?.id) {
+              fetch('/api/progress/' + currentStep.id, {
+                method: 'POST',
+                headers: getAuthHeaders(true),
+              }).catch(() => {});
+            }
+          } catch {}
+
+          // Navigate to next step after 2s
+          setTimeout(() => goToNextStep(), 2000);
+
+        } catch (err) {
+          const errStr = String(err.message || err);
+          if (errStr.includes('AssertionError')) {
+            const msg = errStr.split('AssertionError').pop().replace(/^[:\s]+/, '').trim();
+            output += '\n<span style="color:#ef4444;font-weight:bold">❌ Échec de la validation : ' + escapeHtml(msg || 'Le code ne produit pas le résultat attendu.') + '</span>';
+          } else {
+            output += '\n<span style="color:#ef4444">❌ Erreur de validation : ' + escapeHtml(errStr) + '</span>';
+          }
+          setConsoleOut(output);
+        }
+      } else {
+        setConsoleOut(output);
+      }
+    } catch (err) {
+      setConsoleOut('<span style="color:#ef4444">❌ Erreur Pyodide : ' + escapeHtml(String(err.message || err)) + '</span>');
+    }
+    setIsRunning(false);
   };
 
   const handleTab = (e) => { if (e.key === "Tab") { e.preventDefault(); const s = e.target.selectionStart; setSandboxCode(sandboxCode.substring(0, s) + "    " + sandboxCode.substring(e.target.selectionEnd)); setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s + 4; }, 0); } };
@@ -408,6 +762,8 @@ export default function DauiaApp() {
 .hypr-status{padding:6px 12px;border-top:1px solid rgba(8,145,178,.08);font-size:9px;color:#334155;display:flex;justify-content:space-between;flex-shrink:0;font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;background:#05080f}
 
 @media(max-width:768px){.hypr-tiles{flex-direction:column!important}.hypr-tile{flex:1!important}.hypr-bar{flex-wrap:wrap;height:auto;padding:8px 12px;gap:8px}}
+.hypr-course-bar{display:flex;align-items:center;gap:12px;padding:6px 16px;background:#05080f;border-bottom:1px solid rgba(8,145,178,.15);font-family:var(--mono);font-size:11px;color:#94a3b8;flex-shrink:0;flex-wrap:wrap}
+.hypr-course-info{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.hypr-step-desc{margin-left:auto;color:#64748b;font-size:10px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .footer{border-top:1px solid var(--border);padding:40px 36px 28px;display:flex;justify-content:space-between;align-items:start;max-width:1140px;margin:60px auto 0;flex-wrap:wrap;gap:28px}
 .footer-brand p{color:var(--text-m);font-size:12px;max-width:250px;line-height:1.7;margin-top:8px;font-weight:400}
 .footer-links{display:flex;gap:40px;flex-wrap:wrap}.footer-col h5{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-m);margin-bottom:12px}.footer-col a{display:block;font-size:12.5px;color:var(--text-2);text-decoration:none;padding:3px 0;cursor:pointer;transition:color .15s;font-weight:400}.footer-col a:hover{color:var(--accent-b)}
@@ -433,19 +789,34 @@ export default function DauiaApp() {
         <div className="nav-links">
           <button className={`nav-l ${page==="home"?"act":""}`} onClick={() => navigate("home")}>{I.home} Accueil</button>
           <button className={`nav-l ${page==="catalog"?"act":""}`} onClick={() => navigate("catalog")}>{I.grid} Formations</button>
-          <button className={`nav-l ${page==="sandbox"?"act":""}`} onClick={() => {if(!user){setAuthPage("login");return;} navigate("sandbox");}}>{I.terminal} Python Lab</button>
-          {user?.role==="admin" && <button className={`nav-l ${page==="admin"?"act":""}`} onClick={() => navigate("admin")}>{I.settings} Admin</button>}
+          {user && <button className={`nav-l ${page==="sandbox"?"act":""}`} onClick={() => { setActiveCourse(null); navigate("sandbox"); }}>{I.terminal} Python Lab</button>}
+          {user?.role==="moderateur" && <button className={`nav-l ${page==="admin"?"act":""}`} onClick={() => navigate("admin")}>{I.settings} Admin</button>}
           <button className="theme-toggle" onClick={toggleTheme} title={theme === "dark" ? "Mode clair" : "Mode sombre"}>{theme === "dark" ? I.sun : I.moon}</button>
-          {user ? <UserMenu user={user} onLogout={() => {setUser(null);navigate("home");}} onAdmin={() => navigate("admin")} />
+          {user ? <UserMenu user={user} onLogout={() => {const t=localStorage.getItem("dauia-token");if(t)fetch("/api/auth/logout",{method:"POST",headers:{"Authorization":"Bearer "+t}}).catch(()=>{});localStorage.removeItem("dauia-token");setUser(null);navigate("home");}} onAdmin={() => navigate("admin")} />
             : <button className="nav-cta" onClick={() => setAuthPage("login")}>Se connecter</button>}
         </div>
       </nav>
 
       {/* AUTH MODAL */}
       {authPage && (
-        <div className="modal-overlay" onClick={() => setAuthPage(null)}>
+        <div className="modal-overlay" onClick={() => { setAuthPage(null); setForgotEmail(""); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setAuthPage(null)}>{I.x}</button>
+            <button className="modal-close" onClick={() => { setAuthPage(null); setForgotEmail(""); }}>{I.x}</button>
+
+            {/* ── Forgot Password View ── */}
+            {authPage === "forgot" ? (<>
+              <h2>Mot de passe oublié</h2>
+              <p className="sub">Entrez votre email Dauphine pour recevoir un lien de réinitialisation.</p>
+              <div className="dauphine-badge">{I.lock} Réservé aux adresses @dauphine.psl.eu</div>
+              {authError && <div className="auth-err">{authError}</div>}
+              <form onSubmit={handleForgotPassword}>
+                <div className="field"><label>Email Dauphine</label><input className="inp" type="email" placeholder="prenom.nom@dauphine.psl.eu" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} autoFocus /></div>
+                <button type="submit" className="btn-auth" disabled={authLoading}>{authLoading ? "Envoi en cours..." : "Envoyer le lien de réinitialisation"}</button>
+              </form>
+              <div className="auth-switch"><a onClick={() => { setAuthPage("login"); setAuthError(""); setForgotEmail(""); }}>← Retour à la connexion</a></div>
+            </>) : (<>
+
+            {/* ── Login / Register View ── */}
             <h2>{authPage==="login"?"Connexion":"Créer un compte"}</h2>
             <p className="sub">{authPage==="login"?"Accédez à votre espace dauia.":"Rejoignez la communauté dauia."}</p>
             <div className="dauphine-badge">{I.lock} Réservé aux adresses @dauphine.psl.eu</div>
@@ -454,15 +825,33 @@ export default function DauiaApp() {
               {authPage==="register" && <div className="field"><label>Nom complet</label><input className="inp" placeholder="Prénom Nom" value={authForm.name} onChange={e => setAuthForm({...authForm,name:e.target.value})} /></div>}
               <div className="field"><label>Email Dauphine</label><input className="inp" type="email" placeholder="prenom.nom@dauphine.psl.eu" value={authForm.email} onChange={e => setAuthForm({...authForm,email:e.target.value})} /></div>
               <div className="field"><label>Mot de passe</label><div className="field-input"><input className="inp" type={showPw?"text":"password"} placeholder="••••••••" value={authForm.password} onChange={e => setAuthForm({...authForm,password:e.target.value})} style={{paddingRight:36}} /><button type="button" className="pw-toggle" onClick={() => setShowPw(!showPw)}>{showPw?I.eyeOff:I.eye}</button></div></div>
+              {authPage==="login" && <div style={{textAlign:"right",marginTop:-8,marginBottom:12}}><a onClick={() => { setAuthPage("forgot"); setAuthError(""); }} style={{fontSize:12,color:"var(--accent-b)",cursor:"pointer",fontWeight:500}}>Mot de passe oublié ?</a></div>}
               {authPage==="register" && <div className="field"><label>Confirmer le mot de passe</label><input className="inp" type="password" placeholder="••••••••" value={authForm.confirmPassword} onChange={e => setAuthForm({...authForm,confirmPassword:e.target.value})} /></div>}
-              <button type="submit" className="btn-auth">{authPage==="login"?"Se connecter":"Créer mon compte"}</button>
+              <button type="submit" className="btn-auth" disabled={authLoading}>{authLoading?"Connexion en cours...":authPage==="login"?"Se connecter":"Créer mon compte"}</button>
             </form>
             <div className="auth-switch">{authPage==="login"?<>Pas de compte ? <a onClick={() => {setAuthPage("register");setAuthError("");}}>S'inscrire</a></>:<>Déjà un compte ? <a onClick={() => {setAuthPage("login");setAuthError("");}}>Se connecter</a></>}</div>
+            </>)}
           </div>
         </div>
       )}
 
-      {adminNotif && <div className="notif">{adminNotif}</div>}
+      {/* RESET PASSWORD MODAL */}
+      {showResetModal && (
+        <div className="modal-overlay">
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Nouveau mot de passe</h2>
+            <p className="sub">Choisissez un nouveau mot de passe pour votre compte.</p>
+            {resetError && <div className="auth-err">{resetError}</div>}
+            <form onSubmit={handleResetPassword}>
+              <div className="field"><label>Nouveau mot de passe</label><div className="field-input"><input className="inp" type={showPw?"text":"password"} placeholder="••••••••" value={resetForm.password} onChange={e => setResetForm({...resetForm, password: e.target.value})} style={{paddingRight:36}} autoFocus /><button type="button" className="pw-toggle" onClick={() => setShowPw(!showPw)}>{showPw?I.eyeOff:I.eye}</button></div></div>
+              <div className="field"><label>Confirmer le mot de passe</label><input className="inp" type="password" placeholder="••••••••" value={resetForm.confirmPassword} onChange={e => setResetForm({...resetForm, confirmPassword: e.target.value})} /></div>
+              <button type="submit" className="btn-auth" disabled={resetLoading}>{resetLoading ? "Mise à jour..." : "Mettre à jour mon mot de passe"}</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {(adminNotif || toast) && <div className="notif">{adminNotif || toast}</div>}
 
       <div className={pageTransition?"page-in":"page-out"}>
 
@@ -476,7 +865,7 @@ export default function DauiaApp() {
           <p className="hero-sub">Cours interactifs Python, Data Science & Machine Learning. Codez directement dans votre navigateur.</p>
           <div className="hero-actions">
             <button className="btn-h btn-hp" onClick={() => navigate("catalog")}>Explorer les formations {I.arrow}</button>
-            <button className="btn-h btn-hs" onClick={() => {if(!user){setAuthPage("login");return;} navigate("sandbox");}}>Ouvrir le Sandbox IA</button>
+            {user && <button className="btn-h btn-hs" onClick={() => navigate("sandbox")}>Ouvrir le Sandbox IA</button>}
           </div>
           <div className="cw">
             <div className="cw-bar"><span className="cw-dot" style={{background:"#ef4444"}} /><span className="cw-dot" style={{background:"#f59e0b"}} /><span className="cw-dot" style={{background:"#22c55e"}} /><span style={{flex:1}} /><span style={{fontSize:10.5,color:"var(--text-m)"}}>sandbox.py</span></div>
@@ -487,25 +876,27 @@ export default function DauiaApp() {
         <section className="section">
           <div className="sec-label">Pourquoi dauia</div><h2 className="sec-title">Conçue pour l'IA</h2><p className="sec-desc">Du code, des retours immédiats, des projets réels. Pas de vidéos passives.</p>
           <div className="feat-grid">
-            {[{ic:I.terminal,t:"Sandbox Python IA",d:"NumPy, Pandas, Scikit-learn, Matplotlib. Zéro installation, tout dans le navigateur."},{ic:I.play,t:"Exécution WebAssembly",d:"Pyodide fait tourner Python nativement. Vos données ne quittent jamais votre machine."},{ic:I.settings,t:"Espace admin",d:"Les enseignants créent et gèrent les formations directement depuis l'interface."},{ic:I.user,t:"Accès Dauphine exclusif",d:"Authentification réservée aux étudiants et staff (@dauphine.psl.eu)."},{ic:I.image,t:"Graphiques en direct",d:"Matplotlib et Seaborn s'affichent à côté de votre code en temps réel."},{ic:I.check,t:"Open source",d:"Architecture modulaire React + PHP. Déployable sur votre propre infrastructure."}].map((f,i)=>(
+            {[{ic:I.terminal,t:"Sandbox Python IA",d:"NumPy, Pandas, Scikit-learn, Matplotlib. Zéro installation, tout dans le navigateur."},{ic:I.play,t:"Exécution WebAssembly",d:"Pyodide fait tourner Python nativement. Vos données ne quittent jamais votre machine."},{ic:I.settings,t:"Espace admin",d:"Les modérateurs créent et gèrent les formations directement depuis l'interface."},{ic:I.user,t:"Accès Dauphine exclusif",d:"Authentification réservée aux étudiants et staff (@dauphine.psl.eu)."},{ic:I.image,t:"Graphiques en direct",d:"Matplotlib et Seaborn s'affichent à côté de votre code en temps réel."},{ic:I.check,t:"Open source",d:"Architecture modulaire React + PHP. Déployable sur votre propre infrastructure."}].map((f,i)=>(
               <div key={i} className="feat" style={{animation:`fadeUp .4s ${i*.07}s both`}}><div className="feat-ic">{f.ic}</div><h4>{f.t}</h4><p>{f.d}</p></div>
             ))}
           </div>
         </section>
-        {courses.length > 0 && <section className="section"><div className="sec-label">Formations</div><h2 className="sec-title">Parcours disponibles</h2><div className="c-grid">{courses.slice(0,3).map((c,i)=>{const diff=c.level==="Débutant"?1:c.level==="Intermédiaire"?2:3;return(<div key={c.id} className="c-card" style={{animation:`fadeUp .4s ${i*.08}s both`}} onClick={() => navigate("catalog")}><div className="c-card-bar"><span className="cw-dot" style={{background:"#ef4444"}} /><span className="cw-dot" style={{background:"#f59e0b"}} /><span className="cw-dot" style={{background:"#22c55e"}} /><span style={{flex:1}}/><span>{c.title?.toLowerCase().replace(/\s+/g,"_")}.py</span></div><div className="c-card-body"><div className="c-card-icon" style={{color:"var(--accent-b)"}}>{I[c.icon]||I.book}</div><h3>{c.title}</h3><p>{c.subtitle||""}</p><div className="c-meta">{c.duration&&<span>{I.clock} {c.duration}</span>}<div className="c-diff">{[1,2,3].map(d=><span key={d} className={`c-diff-dot ${d<=diff?"on":""}`}/>)}</div><span>{c.level}</span></div><div className="c-progress"><div className="c-progress-bar" style={{width:"0%"}}/></div></div></div>)})}</div>{courses.length>3&&<div style={{textAlign:"center",marginTop:28}}><button className="btn-h btn-hs" onClick={() => navigate("catalog")}>Voir tout {I.arrow}</button></div>}</section>}
+        {coursesLoading ? <section className="section" style={{textAlign:"center",padding:"60px 20px"}}><p style={{color:"var(--text-m)"}}>Chargement des formations...</p></section>
+        : courses.length > 0 && <section className="section"><div className="sec-label">Formations</div><h2 className="sec-title">Parcours disponibles</h2><div className="c-grid">{courses.slice(0,3).map((c,i)=>{const diff=c.level==="Débutant"?1:c.level==="Intermédiaire"?2:3;const enr=enrollments.find(e=>e.course_id===c.id);const pct=enr?.progress?.percentage||0;return(<div key={c.id} className="c-card" style={{animation:`fadeUp .4s ${i*.08}s both`}} onClick={() => navigate("catalog")}><div className="c-card-bar"><span className="cw-dot" style={{background:"#ef4444"}} /><span className="cw-dot" style={{background:"#f59e0b"}} /><span className="cw-dot" style={{background:"#22c55e"}} /><span style={{flex:1}}/><span>{c.title?.toLowerCase().replace(/\s+/g,"_")}.py</span></div><div className="c-card-body"><div className="c-card-icon" style={{color:"var(--accent-b)"}}>{I[c.icon]||I.book}</div><h3>{c.title}</h3><p>{c.subtitle||""}</p><div className="c-meta">{c.duration&&<span>{I.clock} {c.duration}</span>}<div className="c-diff">{[1,2,3].map(d=><span key={d} className={`c-diff-dot ${d<=diff?"on":""}`}/>)}</div><span>{c.level}</span></div><div className="c-progress"><div className="c-progress-bar" style={{width:pct+"%"}}/></div>{enr&&<div style={{fontSize:11,color:"var(--text-m)",marginTop:4}}>{pct}% complété</div>}</div></div>)})}</div>{courses.length>3&&<div style={{textAlign:"center",marginTop:28}}><button className="btn-h btn-hs" onClick={() => navigate("catalog")}>Voir tout {I.arrow}</button></div>}</section>}
         <section style={{padding:"72px 36px",textAlign:"center",position:"relative",overflow:"hidden"}}><ConstellationBG intensity={.5} /><div style={{position:"relative",zIndex:1}}><h2 className="sec-title" style={{maxWidth:480,margin:"0 auto 14px"}}>Prêt à commencer ?</h2><p style={{color:"var(--text-2)",marginBottom:28,maxWidth:400,margin:"0 auto 28px",fontWeight:400}}>Connectez-vous avec votre adresse Dauphine. Premier accès gratuit.</p><button className="btn-h btn-hp" onClick={() => setAuthPage("register")} style={{animation:"glow 3s infinite"}}>Créer mon compte {I.arrow}</button></div></section>
-        <footer className="footer"><div className="footer-brand"><div style={{display:"flex",alignItems:"center",gap:7}}><div className="nav-logo-mark" style={{width:26,height:26,fontSize:11}}>d</div><span style={{fontWeight:700,fontSize:15}}>dauia.com</span></div><p>Plateforme IA & Data — Paris-Dauphine PSL.</p></div><div className="footer-links"><div className="footer-col"><h5>Plateforme</h5><a onClick={() => navigate("catalog")}>Formations</a><a onClick={() => navigate("sandbox")}>Python Lab</a></div><div className="footer-col"><h5>Université</h5><a>Dauphine PSL</a><a>Contact</a></div></div></footer>
+        <footer className="footer"><div className="footer-brand"><div style={{display:"flex",alignItems:"center",gap:7}}><div className="nav-logo-mark" style={{width:26,height:26,fontSize:11}}>d</div><span style={{fontWeight:700,fontSize:15}}>dauia.com</span></div><p>Plateforme IA & Data — Paris-Dauphine PSL.</p></div><div className="footer-links"><div className="footer-col"><h5>Plateforme</h5><a onClick={() => navigate("catalog")}>Formations</a>{user && <a onClick={() => navigate("sandbox")}>Python Lab</a>}</div><div className="footer-col"><h5>Université</h5><a>Dauphine PSL</a><a>Contact</a></div></div></footer>
       </>)}
 
       {/* CATALOG */}
       {page==="catalog" && (<section className="section" style={{paddingTop:32}}>
-        <div className="sec-label">Catalogue</div><h2 className="sec-title">Formations disponibles</h2><p className="sec-desc">Parcours créés par les enseignants de Dauphine.</p>
-        {courses.length===0?(<div className="empty"><div className="empty-icon">{I.inbox}</div><p>Aucune formation disponible pour le moment.</p>{user?.role==="admin"?<button className="btn-h btn-hp" onClick={() => navigate("admin")}>{I.plus} Créer une formation</button>:<p style={{fontSize:12}}>Les formations seront publiées prochainement.</p>}</div>)
-        :(<div className="c-grid">{courses.map((c,i)=>{const diff=c.level==="Débutant"?1:c.level==="Intermédiaire"?2:3;return(<div key={c.id} className="c-card" style={{animation:`fadeUp .35s ${i*.06}s both`}}><div className="c-card-bar"><span className="cw-dot" style={{background:"#ef4444"}} /><span className="cw-dot" style={{background:"#f59e0b"}} /><span className="cw-dot" style={{background:"#22c55e"}} /><span style={{flex:1}}/><span>{c.title?.toLowerCase().replace(/\s+/g,"_")}.py</span></div><div className="c-card-body"><div className="c-card-icon" style={{color:"var(--accent-b)"}}>{I[c.icon]||I.book}</div><h3>{c.title}</h3><p>{c.subtitle||c.description?.slice(0,80)||""}</p><div className="c-meta">{c.duration&&<span>{I.clock} {c.duration}</span>}<div className="c-diff">{[1,2,3].map(d=><span key={d} className={`c-diff-dot ${d<=diff?"on":""}`}/>)}</div><span>{c.level}</span>{c.modules?.length>0&&<span>{c.modules.filter(m=>m.title).length} modules</span>}</div>{c.tags?.length>0&&<div className="c-tags">{c.tags.map(t=><span key={t} className="tag">{t}</span>)}</div>}<div className="c-progress"><div className="c-progress-bar" style={{width:"0%"}}/></div></div></div>)})}</div>)}
+        <div className="sec-label">Catalogue</div><h2 className="sec-title">Formations disponibles</h2><p className="sec-desc">Parcours créés par l'association DAU'IA.</p>
+        {coursesLoading?(<div style={{textAlign:"center",padding:"60px 20px"}}><p style={{color:"var(--text-m)"}}>Chargement des formations...</p></div>)
+        :courses.length===0?(<div className="empty"><div className="empty-icon">{I.inbox}</div><p>Aucune formation disponible pour le moment.</p>{user?.role==="moderateur"?<button className="btn-h btn-hp" onClick={() => navigate("admin")}>{I.plus} Créer une formation</button>:<p style={{fontSize:12}}>Les formations seront publiées prochainement.</p>}</div>)
+        :(<div className="c-grid">{courses.map((c,i)=>{const diff=c.level==="Débutant"?1:c.level==="Intermédiaire"?2:3;const enr=enrollments.find(e=>e.course_id===c.id);const pct=enr?.progress?.percentage||0;const stepCount=c.step_count||flatSteps(c).length;return(<div key={c.id} className="c-card" style={{animation:`fadeUp .35s ${i*.06}s both`}} onClick={() => { if (user) startCourse(c); else setAuthPage("login"); }}><div className="c-card-bar"><span className="cw-dot" style={{background:"#ef4444"}} /><span className="cw-dot" style={{background:"#f59e0b"}} /><span className="cw-dot" style={{background:"#22c55e"}} /><span style={{flex:1}}/><span>{c.title?.toLowerCase().replace(/\s+/g,"_")}.py</span></div><div className="c-card-body"><div className="c-card-icon" style={{color:"var(--accent-b)"}}>{I[c.icon]||I.book}</div><h3>{c.title}</h3><p>{c.subtitle||c.description?.slice(0,80)||""}</p><div className="c-meta">{c.duration&&<span>{I.clock} {c.duration}</span>}<div className="c-diff">{[1,2,3].map(d=><span key={d} className={`c-diff-dot ${d<=diff?"on":""}`}/>)}</div><span>{c.level}</span>{stepCount>0&&<span>{stepCount} étapes</span>}</div>{c.tags?.length>0&&<div className="c-tags">{c.tags.map(t=><span key={t} className="tag">{t}</span>)}</div>}<div className="c-progress"><div className="c-progress-bar" style={{width:pct+"%"}}/></div>{enr?<div style={{fontSize:11,color:"var(--text-m)",marginTop:4}}>{pct}% complété</div>:<div style={{fontSize:11,color:"var(--accent-b)",marginTop:4}}>Commencer ce parcours</div>}</div></div>)})}</div>)}
       </section>)}
 
       {/* ADMIN */}
-      {page==="admin"&&user?.role==="admin"&&(<section className="section" style={{paddingTop:32}}>
+      {page==="admin"&&user?.role==="moderateur"&&(<section className="section" style={{paddingTop:32}}>
         {editingCourse!==null?(<div style={{animation:"fadeUp .35s both"}}>
           <button className="btn-sm" style={{marginBottom:20}} onClick={() => {setEditingCourse(null);setCourseForm({...emptyCourse});}}>{I.back} Retour</button>
           <h2 className="sec-title" style={{fontSize:24}}>{editingCourse?.id?"Modifier la formation":"Nouvelle formation"}</h2>
@@ -519,16 +910,38 @@ export default function DauiaApp() {
               <div><label style={{display:"block",fontSize:12,fontWeight:500,color:"var(--text-2)",marginBottom:5}}>Durée</label><input className="inp" placeholder="ex: 32h" value={courseForm.duration} onChange={e => setCourseForm({...courseForm,duration:e.target.value})} /></div>
               <div><label style={{display:"block",fontSize:12,fontWeight:500,color:"var(--text-2)",marginBottom:5}}>Tags (virgules)</label><input className="inp" placeholder="Python, Pandas, NumPy" value={courseForm.tags} onChange={e => setCourseForm({...courseForm,tags:e.target.value})} /></div>
             </div>
-            <div className="form-section"><h4>Modules</h4>
-              {courseForm.modules.map((m,i)=>(<div key={i} className="module-row" style={{animation:`slideR .3s ${i*.05}s both`}}><span style={{fontSize:12,color:"var(--text-m)",width:22,textAlign:"center",flexShrink:0}}>{i+1}</span><input className="inp" placeholder="Nom du module" value={m.title} onChange={e => {const ms=[...courseForm.modules];ms[i]={...ms[i],title:e.target.value};setCourseForm({...courseForm,modules:ms});}} style={{flex:1}} /><input className="inp" placeholder="Leçons" value={m.lessons} onChange={e => {const ms=[...courseForm.modules];ms[i]={...ms[i],lessons:e.target.value};setCourseForm({...courseForm,modules:ms});}} style={{width:80}} />{courseForm.modules.length>1&&<button className="btn-sm danger" onClick={() => setCourseForm({...courseForm,modules:courseForm.modules.filter((_,j)=>j!==i)})}>{I.trash}</button>}</div>))}
-              <button className="btn-sm" style={{marginTop:8}} onClick={() => setCourseForm({...courseForm,modules:[...courseForm.modules,{title:"",lessons:""}]})}>{I.plus} Module</button>
+            <div className="form-section"><h4>Modules &amp; Étapes</h4><p style={{fontSize:12,color:"var(--text-m)",marginBottom:12}}>Organisez votre cours en modules contenant des étapes (vidéos, leçons, code).</p>
+              {courseForm.modules.map((mod,mi)=>{const updateMod=(key,val)=>{const ms=[...courseForm.modules];ms[mi]={...ms[mi],[key]:val};setCourseForm({...courseForm,modules:ms});};const updateStep=(si,key,val)=>{const ms=[...courseForm.modules];const steps=[...(ms[mi].steps||[])];steps[si]={...steps[si],[key]:val};ms[mi]={...ms[mi],steps};setCourseForm({...courseForm,modules:ms});};return(
+                <div key={mi} style={{border:"1px solid var(--border)",borderRadius:10,padding:16,marginBottom:16,background:"rgba(255,255,255,.02)",animation:`slideR .3s ${mi*.05}s both`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                    <span style={{fontSize:11,fontWeight:700,color:"var(--accent-b)",letterSpacing:".5px"}}>MODULE {mi+1}</span>
+                    <input className="inp" placeholder="Titre du module" value={mod.title} onChange={e=>updateMod("title",e.target.value)} style={{flex:1}} />
+                    <div style={{display:"flex",gap:4}}>
+                      {mi>0&&<button className="btn-sm" onClick={()=>{const ms=[...courseForm.modules];[ms[mi-1],ms[mi]]=[ms[mi],ms[mi-1]];setCourseForm({...courseForm,modules:ms});}}>↑</button>}
+                      {mi<courseForm.modules.length-1&&<button className="btn-sm" onClick={()=>{const ms=[...courseForm.modules];[ms[mi],ms[mi+1]]=[ms[mi+1],ms[mi]];setCourseForm({...courseForm,modules:ms});}}>↓</button>}
+                      {courseForm.modules.length>1&&<button className="btn-sm danger" onClick={()=>setCourseForm({...courseForm,modules:courseForm.modules.filter((_,j)=>j!==mi)})}>{I.trash}</button>}
+                    </div>
+                  </div>
+                  {(mod.steps||[]).map((s,si)=>(<div key={si} style={{marginLeft:12,paddingLeft:12,borderLeft:"2px solid var(--border)",marginBottom:10,animation:`slideR .2s ${si*.03}s both`}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                      <span style={{fontSize:11,fontWeight:600,color:s.type==="video"?"#ef4444":s.type==="code"?"#22c55e":"#3b82f6"}}>{s.type==="video"?"Vidéo":s.type==="code"?"Code":"Leçon"} · {si+1}</span>
+                      <div style={{flex:1}}/>{si>0&&<button className="btn-sm" style={{padding:"2px 6px"}} onClick={()=>{const ms=[...courseForm.modules];const st=[...(ms[mi].steps||[])];[st[si-1],st[si]]=[st[si],st[si-1]];ms[mi]={...ms[mi],steps:st};setCourseForm({...courseForm,modules:ms});}}>↑</button>}{si<(mod.steps||[]).length-1&&<button className="btn-sm" style={{padding:"2px 6px"}} onClick={()=>{const ms=[...courseForm.modules];const st=[...(ms[mi].steps||[])];[st[si],st[si+1]]=[st[si+1],st[si]];ms[mi]={...ms[mi],steps:st};setCourseForm({...courseForm,modules:ms});}}>↓</button>}<button className="btn-sm danger" style={{padding:"2px 6px"}} onClick={()=>{const ms=[...courseForm.modules];ms[mi]={...ms[mi],steps:(ms[mi].steps||[]).filter((_,j)=>j!==si)};setCourseForm({...courseForm,modules:ms});}}>✕</button>
+                    </div>
+                    <input className="inp" placeholder="Titre de l'étape" value={s.title} onChange={e=>updateStep(si,"title",e.target.value)} style={{marginBottom:4}} />
+                    {s.type==="video"&&<><input className="inp" placeholder="URL YouTube" value={s.url||""} onChange={e=>updateStep(si,"url",e.target.value)} style={{marginBottom:4}} /><textarea className="textarea" placeholder="Transcription" value={s.transcription||""} onChange={e=>updateStep(si,"transcription",e.target.value)} style={{minHeight:60}} /><textarea className="textarea" placeholder="Ressources (un par ligne : nom | taille)" value={s.resources||""} onChange={e=>updateStep(si,"resources",e.target.value)} style={{minHeight:40}} /></>}
+                    {s.type==="lesson"&&<textarea className="textarea" placeholder="Contenu de la leçon..." value={s.content||""} onChange={e=>updateStep(si,"content",e.target.value)} style={{minHeight:100}} />}
+                    {s.type==="code"&&<><input className="inp" placeholder="Consigne" value={s.description||""} onChange={e=>updateStep(si,"description",e.target.value)} style={{marginBottom:4}} /><textarea className="textarea" placeholder="Code de départ" value={s.code||""} onChange={e=>updateStep(si,"code",e.target.value)} style={{fontFamily:"monospace",fontSize:12,minHeight:80}} /><textarea className="textarea" placeholder="Solution (auto-correction)" value={s.solution_code||""} onChange={e=>updateStep(si,"solution_code",e.target.value)} style={{fontFamily:"monospace",fontSize:12,minHeight:60}} /></>}
+                  </div>))}
+                  <div style={{display:"flex",gap:6,marginTop:8,marginLeft:12}}><button className="btn-sm" onClick={()=>{const ms=[...courseForm.modules];ms[mi]={...ms[mi],steps:[...(ms[mi].steps||[]),{...emptyStep,type:"video"}]};setCourseForm({...courseForm,modules:ms});}}>{I.play} Vidéo</button><button className="btn-sm" onClick={()=>{const ms=[...courseForm.modules];ms[mi]={...ms[mi],steps:[...(ms[mi].steps||[]),{...emptyStep,type:"lesson"}]};setCourseForm({...courseForm,modules:ms});}}>{I.file} Leçon</button><button className="btn-sm" onClick={()=>{const ms=[...courseForm.modules];ms[mi]={...ms[mi],steps:[...(ms[mi].steps||[]),{...emptyStep,type:"code"}]};setCourseForm({...courseForm,modules:ms});}}>{I.terminal} Code</button></div>
+                </div>);})}
+              <button className="btn-sm primary" style={{marginTop:8}} onClick={() => setCourseForm({...courseForm,modules:[...courseForm.modules,{title:"Module "+(courseForm.modules.length+1),steps:[]}]})}>{I.plus} Nouveau module</button>
             </div>
             <div style={{display:"flex",gap:10,marginTop:28,justifyContent:"flex-end"}}><button className="btn-sm" onClick={() => {setEditingCourse(null);setCourseForm({...emptyCourse});}}>Annuler</button><button className="btn-sm primary" onClick={saveCourse}>{I.save} Enregistrer</button></div>
           </div>
         </div>):(<>
           <div className="admin-header"><div><div className="sec-label">Administration</div><h2 className="sec-title" style={{fontSize:26,marginBottom:0}}>Gestion des formations</h2></div><button className="btn-sm primary" onClick={() => {setEditingCourse({});setCourseForm({...emptyCourse});}}>{I.plus} Nouvelle formation</button></div>
           {courses.length===0?(<div className="empty"><div className="empty-icon">{I.clipboard}</div><p>Aucune formation. Commencez par en créer une.</p><button className="btn-h btn-hp" style={{fontSize:13,padding:"10px 22px"}} onClick={() => {setEditingCourse({});setCourseForm({...emptyCourse});}}>{I.plus} Créer la première</button></div>)
-          :(<div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:13,overflow:"hidden"}}><table className="admin-table"><thead><tr><th></th><th>Formation</th><th>Niveau</th><th>Durée</th><th>Modules</th><th>Actions</th></tr></thead><tbody>{courses.map((c,i)=>(<tr key={c.id} style={{animation:`slideR .3s ${i*.05}s both`}}><td style={{width:50,textAlign:"center",color:"var(--accent-b)"}}>{I[c.icon]||I.book}</td><td><div style={{fontWeight:600,fontSize:13.5}}>{c.title}</div><div style={{fontSize:11.5,color:"var(--text-m)"}}>{c.subtitle}</div></td><td><span className="tag">{c.level}</span></td><td style={{color:"var(--text-2)"}}>{c.duration||"—"}</td><td style={{color:"var(--text-2)"}}>{c.modules?.filter(m=>m.title).length||0}</td><td><div className="admin-actions"><button className="btn-sm" onClick={() => startEdit(c)}>{I.edit} Modifier</button><button className="btn-sm danger" onClick={() => deleteCourse(c.id)}>{I.trash}</button></div></td></tr>))}</tbody></table></div>)}
+          :(<div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:13,overflow:"hidden"}}><table className="admin-table"><thead><tr><th></th><th>Formation</th><th>Niveau</th><th>Durée</th><th>Modules / Étapes</th><th>Actions</th></tr></thead><tbody>{courses.map((c,i)=>(<tr key={c.id} style={{animation:`slideR .3s ${i*.05}s both`}}><td style={{width:50,textAlign:"center",color:"var(--accent-b)"}}>{I[c.icon]||I.book}</td><td><div style={{fontWeight:600,fontSize:13.5}}>{c.title}</div><div style={{fontSize:11.5,color:"var(--text-m)"}}>{c.subtitle}</div></td><td><span className="tag">{c.level}</span></td><td style={{color:"var(--text-2)"}}>{c.duration||"—"}</td><td style={{color:"var(--text-2)"}}>{c.step_count ?? flatSteps(c).length} étapes</td><td><div className="admin-actions"><button className="btn-sm" onClick={() => startEdit(c)}>{I.edit} Modifier</button><button className="btn-sm danger" onClick={() => deleteCourse(c.id)}>{I.trash}</button></div></td></tr>))}</tbody></table></div>)}
         </>)}
       </section>)}
 
@@ -544,9 +957,24 @@ export default function DauiaApp() {
           </div>
           <div className="hypr-bar-right">
             <button className="btn-sm hypr-btn" onClick={() => setSandboxCode("")}>{I.trash} Vider</button>
-            <button className="btn-sm hypr-btn-primary" onClick={runSandbox} disabled={isRunning}>{I.play} EXÉCUTER</button>
+            <button className="btn-sm hypr-btn-primary" onClick={runSandbox} disabled={isRunning}>{I.play} {isRunning ? "EXÉCUTION..." : (currentStep?.solution_code ? "VALIDER" : "EXÉCUTER")}</button>
           </div>
         </div>
+
+        {/* Course context bar */}
+        {activeCourse && currentStep && (
+          <div className="hypr-course-bar">
+            <button className="btn-sm hypr-btn" onClick={() => { setActiveCourse(null); setConsoleOut(""); }}>{I.back} Quitter</button>
+            <span className="hypr-course-info">
+              <span style={{color:"#22d3ee",fontWeight:700}}>{activeCourse.title}</span>
+              <span style={{color:"#475569"}}> &rsaquo; </span>
+              <span>{activeCourse.modules[activeModuleIdx]?.title}</span>
+              <span style={{color:"#475569"}}> &rsaquo; </span>
+              <span style={{color:"#34d399"}}>Étape {activeStepIdx + 1}</span>
+            </span>
+            {currentStep.description && <span className="hypr-step-desc">{currentStep.description}</span>}
+          </div>
+        )}
 
         {/* Tiling area */}
         <div className="hypr-tiles" style={{flexDirection: sbLayout}}>
@@ -587,10 +1015,10 @@ export default function DauiaApp() {
                     <div className="hypr-editor-area"><div className="hypr-ln">{sandboxCode.split("\n").map((_,i)=><div key={i}>{i+1}</div>)}</div><textarea className="hypr-ta" value={sandboxCode} onChange={e=>setSandboxCode(e.target.value)} onKeyDown={handleTab} spellCheck={false} /></div>
                   </>)}
                   {panelId === "console" && (
-                    <div className="hypr-console">{isRunning?<span className="hypr-blink">{">>>"} Exécution en cours...</span>:consoleOut||<span style={{color:"#475569"}}>{">>>"} Cliquez EXÉCUTER pour lancer votre code.</span>}</div>
+                    <div className="hypr-console">{isRunning?<span dangerouslySetInnerHTML={{__html:consoleOut||'<span class="hypr-blink">&gt;&gt;&gt; Exécution en cours...</span>'}}/>:consoleOut?<span dangerouslySetInnerHTML={{__html:consoleOut}}/>:<span style={{color:"#475569"}}>{">>>"} Cliquez {currentStep?.solution_code?"VALIDER":"EXÉCUTER"} pour lancer votre code.</span>}</div>
                   )}
                   {panelId === "terminal" && (<>
-                    <div className="hypr-console hypr-term"><span className="hypr-prompt">dauia@workspace</span>:<span style={{color:"#22d3ee"}}>~</span>$ {isRunning ? <span className="hypr-blink">python main.py</span> : consoleOut ? <>python main.py{"\n"}<span style={{color:"#94a3b8"}}>{consoleOut}</span></> : ""}</div>
+                    <div className="hypr-console hypr-term"><span className="hypr-prompt">dauia@workspace</span>:<span style={{color:"#22d3ee"}}>~</span>$ {isRunning ? <span className="hypr-blink">python main.py</span> : consoleOut ? <>python main.py{"\n"}<span style={{color:"#94a3b8"}}>{stripHtml(consoleOut)}</span></> : ""}</div>
                     <div className="hypr-status"><span>Python 3.11 · Pyodide (WASM)</span><span>numpy · pandas · sklearn · matplotlib</span></div>
                   </>)}
                 </div>
